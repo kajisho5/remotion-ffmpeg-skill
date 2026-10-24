@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- Pip -- a camera in a corner, synced from the audio
+
+
 ## 0.9.0 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
