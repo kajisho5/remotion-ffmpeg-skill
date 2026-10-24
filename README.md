@@ -8,7 +8,14 @@ Built on [**ffmpeg-skill**](https://github.com/kajisho5/ffmpeg-skill). Unofficia
 
 ![Jumpcut: the silences ffmpeg-skill measured are gone, every other cut punches in, captions re-timed to the new cut](assets/demo-jumpcut.gif)
 
-<sub>Fictional demo footage. Left to right in time: ffmpeg-skill measured two silences and a scene cut; Remotion played only the speech ranges with punch-in zooms and re-timed captions; render.py verified 201 of 201 frames.</sub>
+<sub>Fictional demo footage. ffmpeg-skill measured two silences and a scene cut; Remotion played only the speech ranges with punch-in zooms and re-timed captions; render.py verified 201 of 201 frames.</sub>
+
+<table>
+<tr>
+<td width="62%"><img src="assets/demo-karaoke.gif" alt="Karaoke: each word lights up at the time a speech engine measured"><br><sub><b>Karaoke</b> — words light up at their measured times (250 / 250 frames verified)</sub></td>
+<td width="38%"><img src="assets/demo-portrait-ja.gif" alt="9:16 jump cut with Japanese captions on a blurred fill"><br><sub><b>9:16 + Japanese</b> — silences cut, CJK font staged automatically, phrase-based line breaks</sub></td>
+</tr>
+</table>
 
 ## Why this and not just Remotion's own skills?
 
