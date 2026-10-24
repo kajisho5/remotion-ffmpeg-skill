@@ -111,8 +111,8 @@ Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30
 
 ## Agent evals
 
-Six plain requests ("captions for YouTube", a Japanese Reels jump cut, "cut to the beat", a lower third without a name, a plain trim that is *not* this skill's job, a square highlight reel), run by an agent that only has the skill files, graded on what it leaves behind: **6 / 6** on the first run ([results](evals/results/2026-10-24.md), [how to run](evals/README.md)).
+Plain requests ("captions for YouTube", a Japanese Reels jump cut, "cut to the beat", a lower third without a name, a plain trim that is *not* this skill's job, a square highlight reel), run by an agent that only has the skill files, graded on what it leaves behind — plus a transparent layer for an editor, joining clips with titles, and karaoke from word timings: **9 / 9** ([run 1](evals/results/2026-10-24.md), [run 2](evals/results/2026-10-24b.md), [how to run](evals/README.md)).
 
 ## Status
 
-0.3.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Next: rendering only the captioned ranges for long footage, macOS/Windows CI, more eval tasks ([roadmap](ROADMAP.md)).
+0.4.0. CI renders every composition on Linux, macOS and Windows (Node 22, Remotion 4.0.538, ffmpeg-skill main).

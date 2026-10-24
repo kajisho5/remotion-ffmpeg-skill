@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — 2026-10-24
+
+- **Karaoke captions:** `analyze.py --words` reads word timings from a local speech engine (whisper JSON with word timestamps); the `Karaoke` composition lights each word at its measured time. Without an SRT, cues are grouped from the words mechanically (pause / length rules), never reworded.
+- **About twice as fast:** render.py uses all CPU cores by default (`--concurrency 100%`); 30 s of 1080p30 on 2 cores went from 170 s to 80 s.
+- **Tested on Linux, macOS and Windows** in CI, including real renders of every composition, portrait output and the overlay layer.
+- macOS: Homebrew's plain `ffmpeg` has no `drawtext`, so ffmpeg-skill's contact sheets fail on it; render.py now reports `look_error` with the fix (`brew install ffmpeg-full`) instead of dropping it silently.
+- Clearer Remotion errors (the `Error:` line, not the JavaScript stack).
+- Generated `references/scripts.md` (checked against the contract by a test), `references/gotchas.md`, `docs/design-decisions.md`, `AGENTS.md`, `.claude-plugin/plugin.json`, code of conduct.
+- Evals: three more tasks (graphics layer for an editor, join + titles, karaoke from words); 9 / 9 passed.
+
 ## 0.3.0 — 2026-10-24
 
 - **Machine-readable contract and MCP server:** `scripts/_contract.py` (`npx remotion-ffmpeg-skill contract --json`) describes every tool — role, what it writes, how it verifies, input schema generated from its argparse parser; `mcp/server.py` serves the same tools over stdio JSON-RPC with typed errors.
