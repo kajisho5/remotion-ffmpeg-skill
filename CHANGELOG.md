@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- chapters -- cards in Titled, markers and description block on delivery
+
+
 ## 0.7.0 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
