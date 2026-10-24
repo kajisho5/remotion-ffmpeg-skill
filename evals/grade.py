@@ -48,6 +48,12 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
             if "beats_usable" in c:
                 ok = ok and bool((data.get("beats") or {}).get("usable")) == c["beats_usable"]
                 detail += f"; beats usable={(data.get('beats') or {}).get('usable')}"
+            if "clips" in c:
+                ok = ok and len(data.get("clips", [])) == c["clips"]
+                detail += f"; clips={len(data.get('clips', []))}"
+            if "min_words" in c:
+                ok = ok and len(data.get("words", [])) >= c["min_words"]
+                detail += f"; words={len(data.get('words', []))}"
             if "min_highlights" in c:
                 ok = ok and len(data.get("highlights", [])) >= c["min_highlights"]
                 detail += f"; highlights={len(data.get('highlights', []))}"
@@ -65,10 +71,11 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
             for key, cond in (("width", lambda: w == c["width"]), ("height", lambda: h == c["height"]),
                               ("max_duration", lambda: d <= c["max_duration"]),
                               ("min_duration", lambda: d >= c["min_duration"]),
-                              ("square", lambda: w == h)):
+                              ("square", lambda: w == h),
+                              ("alpha", lambda: str(v.get("pix_fmt", "")).startswith(("yuva", "rgba", "argb", "bgra", "gbrap")))):
                 if key in c:
                     good = good and cond()
-            seen.append(f"{f.name}: {w}x{h} {d:.2f}s")
+            seen.append(f"{f.name}: {w}x{h} {d:.2f}s {v.get('pix_fmt')}")
             if good:
                 return {"check": c, "ok": True, "detail": seen[-1]}
         ok, detail = False, "none meets it: " + "; ".join(seen)
@@ -101,7 +108,7 @@ def grade(task_id: str, work: Path, reply: str) -> Dict[str, Any]:
 
 def record_fixture_hashes(work: Path) -> None:
     hashes = {p.name: hashlib.sha1(p.read_bytes()).hexdigest() for p in work.iterdir()
-              if p.is_file() and p.suffix in (".mp4", ".srt")}
+              if p.is_file() and p.suffix in (".mp4", ".srt", ".json")}
     (work / FIXTURE_HASHES_FILE).write_text(json.dumps(hashes))
 
 

@@ -130,6 +130,59 @@
           "square": true
         }
       ]
+    },
+    {
+      "id": "graphics-layer-for-editor",
+      "prompt": "I'm finishing talk.mp4 in Premiere. Give me the captions from talk.srt as a separate transparent layer I can put on top.",
+      "checks": [
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        {
+          "type": "video",
+          "glob": "*.mov",
+          "alpha": true
+        },
+        {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        }
+      ]
+    },
+    {
+      "id": "join-then-titles",
+      "prompt": "Join talk.mp4 and music.mp4 into one video and put a title card 'Part 1' and 'Part 2' at the start of each.",
+      "checks": [
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "clips": 2
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 19.5
+        }
+      ]
+    },
+    {
+      "id": "karaoke-from-words",
+      "prompt": "Make karaoke-style captions for talk.mp4 where each word lights up as it's spoken. The word timings from my transcription are in talk_words.json.",
+      "checks": [
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "min_words": 5
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 7.5,
+          "max_duration": 8.5
+        }
+      ]
     }
   ]
 }
