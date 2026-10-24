@@ -255,6 +255,104 @@
         }
       ],
       "note": "ffmpeg-skill caption.py --karaoke alone is a valid route."
+    },
+    {
+      "id": "reel-keep-whole-frame",
+      "prompt": "talk.mp4 に talk_ja.srt の字幕を付けて、Instagram のリール用にして。横長の画面は切らずに全部見せて。",
+      "checks": [
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1080,
+          "height": 1920
+        },
+        {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "captions": 2
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "ぼかし",
+                    "blur",
+                    "余白",
+                    "上下",
+                    "pad",
+                    "黒帯"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        }
+      ],
+      "note": "The whole 16:9 picture must stay: a blurred or padded fill, never a centre crop."
+    },
+    {
+      "id": "long-footage-captions",
+      "prompt": "Put animated captions from lecture.srt on lecture.mp4. It's long footage with only a few captions, so keep the render as quick as you can.",
+      "checks": [
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 59.5
+        },
+        {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill --sparse",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "captions": 3
+                },
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "sparse",
+                    "stretch"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "no_dir",
+                  "glob": "*/src/index.ts"
+                },
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "caption.py",
+                    "ffmpeg-skill"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Either only the captioned stretches are drawn (--sparse) or no browser render at all."
     }
   ]
 }

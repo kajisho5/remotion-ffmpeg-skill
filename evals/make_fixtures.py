@@ -36,6 +36,19 @@ WORDS = """{"segments": [
 ]}
 """
 
+LECTURE_SRT = """1
+00:00:03,000 --> 00:00:06,000
+Placeholder lecture, opening line.
+
+2
+00:00:29,000 --> 00:00:32,000
+A line in the middle of the recording.
+
+3
+00:00:54,000 --> 00:00:57,500
+And a closing placeholder line.
+"""
+
 
 def ff(*args):
     subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
@@ -59,6 +72,11 @@ def main(d: Path) -> None:
        "-f", "lavfi", "-i", "aevalsrc='sin(2*PI*80*t)*exp(-mod(t\\,0.5)*12)*(0.4+0.6*gt(t\\,8))':s=44100:d=12",
        "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0,format=yuv420p[v]",
        "-map", "[v]", "-map", "3:a", "-c:v", "libx264", "-c:a", "aac", "-t", "12", str(d / "music.mp4"))
+    # lecture.mp4: 60 s, one shot, a steady tone -- long footage with few captions
+    ff("-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=60",
+       "-f", "lavfi", "-i", "sine=f=330:d=60", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+       "-shortest", str(d / "lecture.mp4"))
+    (d / "lecture.srt").write_text(LECTURE_SRT, encoding="utf-8")
     (d / "talk.srt").write_text(SRT, encoding="utf-8")
     (d / "talk_words.json").write_text(WORDS, encoding="utf-8")
     (d / "talk_ja.srt").write_text(JA_SRT, encoding="utf-8")
