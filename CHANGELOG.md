@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- deliver.py crashed without --chapters (0.8.0)
+
+
 ## 0.8.0 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
