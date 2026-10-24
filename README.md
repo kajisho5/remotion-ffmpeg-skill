@@ -116,7 +116,7 @@ This skill is MIT. **Remotion itself has its own licence**: free for individuals
 
 Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30 s 1080p30 render takes about 80 s (≈ 2.6× the clip length) with render.py's default of all CPU cores — Remotion's own default (half the cores) took 170 s. More cores scale it further. Check with `still.py` and `--fast` before a full render of long footage.
 
-**`--sparse`** (Captioned, Karaoke): only the frames that show a caption are drawn; ffmpeg-skill places each stretch back at its time over the untouched source. Same picture frame for frame (checked by an integration test), and the render time follows the captioned share of the footage: 60 s with 7 s of captions took 46 s instead of 152 s. Needs an ffmpeg-skill whose `overlay.py` has `--place`; otherwise it draws the full layer and says why.
+**`--sparse`** (Captioned, Karaoke, Titled): only the frames that show a caption, lower third or scene title are drawn; ffmpeg-skill places each stretch back at its time over the untouched source. Same picture frame for frame (checked by an integration test), and the render time follows the captioned share of the footage: 60 s with 7 s of captions took 46 s instead of 152 s; 40 s with two scene titles and a lower third, 39 s instead of 104 s. Needs an ffmpeg-skill whose `overlay.py` has `--place`; otherwise it draws the full layer and says why.
 
 ## Agent evals
 

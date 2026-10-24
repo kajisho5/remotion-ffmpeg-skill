@@ -112,8 +112,8 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--no-look` | boolean |  | skip the contact sheet |
 | `--overlay` | boolean |  | draw the graphics only as a transparent ProRes 4444 layer and composite it over the untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut) |
 | `--keep-graphics` | boolean |  | with --overlay: keep the transparent graphics .mov |
-| `--sparse` | boolean |  | overlay mode that draws only the frames where captions show (Captioned / Karaoke) and places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long footage with gaps between captions. Falls back to the full-length layer (and says why) when this ffmpeg-skill has no --place or the source does not start at 0 |
-| `--merge-gap` | number | `2.0` | with --sparse: captions closer than this many seconds are drawn as one stretch (default 2) |
+| `--sparse` | boolean |  | overlay mode that draws only the frames where something shows (Captioned / Karaoke / Titled) and places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long footage with gaps between captions. Falls back to the full-length layer (and says why) when this ffmpeg-skill has no --place or the source does not start at 0 |
+| `--merge-gap` | number | `2.0` | with --sparse: graphics closer than this many seconds are drawn as one stretch (default 2) |
 | `--aspect` | string: source / 16:9 / 9:16 / 1:1 / 4:5 / 4:3 |  | output shape (default: the source's own). 9:16 for Reels/TikTok/Shorts, 1:1, 4:5, 16:9 |
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |

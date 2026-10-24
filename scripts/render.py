@@ -45,12 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut)")
     p.add_argument("--keep-graphics", action="store_true", help="with --overlay: keep the transparent graphics .mov")
     p.add_argument("--sparse", action="store_true",
-                   help="overlay mode that draws only the frames where captions show (Captioned / Karaoke) and "
+                   help="overlay mode that draws only the frames where something shows (Captioned / Karaoke / "
+                        "Titled) and "
                         "places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long "
                         "footage with gaps between captions. Falls back to the full-length layer (and says why) "
                         "when this ffmpeg-skill has no --place or the source does not start at 0")
     p.add_argument("--merge-gap", type=float, default=2.0,
-                   help="with --sparse: captions closer than this many seconds are drawn as one stretch (default 2)")
+                   help="with --sparse: graphics closer than this many seconds are drawn as one stretch (default 2)")
     add_frame_args(p)
     add_common(p)
     return p
@@ -144,34 +145,34 @@ def ffskill_can_place() -> bool:
     return "--place" in (proc.stdout or "")
 
 
-def sparse_plan(timeline: Dict[str, Any], a: argparse.Namespace) -> Dict[str, Any]:
+def sparse_plan(timeline: Dict[str, Any], options: Dict[str, Any], a: argparse.Namespace) -> Dict[str, Any]:
     """What --sparse will draw, or why it falls back to the full-length layer."""
     src = timeline["source"]
     fps = float(src["fps"])
     total = expected_frames(a.comp, timeline) or 1
     plan: Dict[str, Any] = {"used": False, "reason": None, "stretches": 0, "drawn_frames": total,
-                            "source_frames": total, "timeline": None, "place": []}
-    stretches = _sparse.caption_stretches(timeline, a.merge_gap)
+                            "source_frames": total, "timeline": None, "options": None, "place": []}
+    stretches = _sparse.plan_stretches(a.comp, timeline, options, a.merge_gap)
     start = None
     if stretches and src.get("path") and not STATE.dry_run:
         # the source as it is now (older timelines do not record where its first picture sits)
         start = (ffskill("probe", [str(src["path"])], allow_fail=True).get("video") or {}).get("start_time")
     if not stretches:
-        plan["reason"] = "no captions to draw"
+        plan["reason"] = "nothing to draw (no captions, lower thirds or scene titles)"
     elif len(stretches) > _sparse.MAX_STRETCHES:
-        plan["reason"] = (f"{len(stretches)} caption stretches (over {_sparse.MAX_STRETCHES}); raise --merge-gap")
+        plan["reason"] = (f"{len(stretches)} stretches (over {_sparse.MAX_STRETCHES}); raise --merge-gap")
     elif isinstance(start, (int, float)) and abs(start) > 0.5 / fps:
         plan["reason"] = (f"the source's first picture is at {start:.3f} s, not 0: placed stretches would be "
                           "shifted by that much")
     elif not ffskill_can_place():
         plan["reason"] = "this ffmpeg-skill's overlay.py has no --place yet (update ffmpeg-skill)"
     else:
-        packed, layout = _sparse.pack(timeline, stretches)
+        packed, packed_options, layout = _sparse.pack(timeline, stretches, options)
         drawn = _sparse.packed_frames(layout)
         if drawn >= total:
-            plan["reason"] = "captions cover the whole source: nothing to skip"
+            plan["reason"] = "the graphics cover the whole source: nothing to skip"
         else:
-            plan.update(used=True, stretches=len(layout), drawn_frames=drawn, timeline=packed,
+            plan.update(used=True, stretches=len(layout), drawn_frames=drawn, timeline=packed, options=packed_options,
                         place=_sparse.place_args(layout, fps))
     if plan["reason"]:
         info(f"--sparse: drawing the full length instead ({plan['reason']})")
@@ -203,7 +204,7 @@ def main() -> None:
 
     if a.sparse:
         if a.comp not in _sparse.SPARSE_COMPOSITIONS:
-            die(f"--sparse draws caption stretches only: {a.comp} is not one of "
+            die(f"--sparse draws only the stretches where graphics show: {a.comp} is not one of "
                 f"{', '.join(_sparse.SPARSE_COMPOSITIONS)} (use --overlay for the full-length layer)", "input")
         if a.merge_gap < 0:
             die("--merge-gap cannot be negative", "input")
@@ -219,9 +220,10 @@ def main() -> None:
         if not timeline["source"].get("has_video"):
             die("--overlay needs a video source to composite onto", "input")
 
-    sparse = sparse_plan(timeline, a) if a.sparse else None
-    drawn = sparse["timeline"] if sparse and sparse["used"] else timeline
-    props_path, frame, font_note = prepare_props(project, a.comp, drawn, options, a)
+    sparse = sparse_plan(timeline, options, a) if a.sparse else None
+    used = bool(sparse and sparse["used"])
+    props_path, frame, font_note = prepare_props(project, a.comp, sparse["timeline"] if used else timeline,
+                                                 sparse["options"] if used else options, a)
     if font_note:
         info(font_note)
     graphics = output.with_name(output.stem + ".graphics.mov") if a.overlay else output

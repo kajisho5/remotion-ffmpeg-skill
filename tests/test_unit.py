@@ -253,7 +253,7 @@ class Sparse(unittest.TestCase):
         self.assertEqual(_sparse.caption_stretches(self.T, 0.0), [(30, 90), (105, 150), (900, 960)])
 
     def test_packed_back_to_back_with_one_blank_frame(self):
-        packed, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        packed, _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
         self.assertEqual(layout, [(0, 120, 30), (121, 60, 900)])
         self.assertEqual(_sparse.packed_frames(layout), 181)
         self.assertEqual(_common.sec_to_frames(packed["source"]["duration"], 30.0), 181)
@@ -262,16 +262,40 @@ class Sparse(unittest.TestCase):
         self.assertEqual(packed["peaks"], [])
 
     def test_shift_is_whole_frames_so_sub_frame_word_times_survive(self):
-        packed, _ = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        packed, _, _ = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
         w0, w1 = packed["words"]
         self.assertAlmostEqual(w0["start"] * 30, 1.01 * 30 - 30, places=6)
         # a word starting just before its cue still goes with it (Karaoke assigns words by midpoint)
         self.assertAlmostEqual(w1["start"] * 30, 29.99 * 30 - (900 - 121), places=6)
 
     def test_place_ranges_sit_half_a_frame_inside(self):
-        _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        _, _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
         self.assertEqual(_sparse.place_args(layout, 30.0),
                          ["--place", "0.000000-3.983333@1.000000", "--place", "4.016667-6.016667@30.000000"])
+
+    def test_titled_moves_lower_thirds_and_titled_scene_cards(self):
+        t = {"source": {"fps": 30.0, "duration": 60.0}, "captions": [],
+             "scenes": [{"start": 0, "end": 20}, {"start": 20, "end": 21}, {"start": 21, "end": 60}]}
+        o = {"sceneTitles": ["", "Part two", "Part three"],
+             "lowerThirds": [{"text": "Name", "sub": "Role", "start": 40, "end": 44}]}
+        spans = _sparse.plan_stretches("Titled", t, o, 0.0)
+        # scene 2: 1 s scene -> 1 s card, touching scene 3's card (capped at 2.5 s); the lower third;
+        # scene 1 has no title and draws nothing
+        self.assertEqual(spans, [(600, 705), (1200, 1320)])
+        spans = _sparse.plan_stretches("Titled", t, o, 2.0)
+        self.assertEqual(spans, [(600, 705), (1200, 1320)])
+        tl, opts, layout = _sparse.pack(t, spans, o)
+        self.assertEqual(layout, [(0, 105, 600), (106, 120, 1200)])
+        self.assertEqual(len(tl["scenes"]), 3)  # matched to sceneTitles by index
+        self.assertEqual([_common.sec_to_frames(x, 30.0) for x in (tl["scenes"][1]["start"], tl["scenes"][1]["end"])], [0, 30])
+        self.assertEqual([_common.sec_to_frames(x, 30.0) for x in (tl["scenes"][2]["start"], tl["scenes"][2]["end"])], [30, 105])
+        self.assertEqual(_common.sec_to_frames(opts["lowerThirds"][0]["start"], 30.0), 106)
+        self.assertEqual(opts["lowerThirds"][0]["text"], "Name")
+        self.assertEqual(o["lowerThirds"][0]["start"], 40)  # the caller's options are not changed
+
+    def test_scene_card_length_matches_titled_tsx(self):
+        tsx = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/compositions/Titled.tsx").read_text()
+        self.assertIn(f"Math.round(fps * {_sparse.SCENE_CARD_SECONDS:g})", tsx)
 
     def test_cue_past_the_end_is_kept_inside(self):
         t = {"source": {"fps": 30.0, "duration": 2.0}, "captions": [{"start": 1.5, "end": 9, "text": "x"}]}

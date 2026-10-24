@@ -205,22 +205,28 @@ class Analyze(unittest.TestCase):
 
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_sparse_matches_the_full_layer(self):
-        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
-                           "-o", self.tmp / "sp_full.mp4", "--overlay", "--no-look")
-        self.assertEqual(code, 0, res)
-        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
-                           "-o", self.tmp / "sp_sparse.mp4", "--sparse", "--merge-gap", "0", "--no-look")
-        self.assertEqual(code, 0, res)
-        if not res["sparse"]["used"]:
-            self.skipTest(res["sparse"]["reason"])
-        self.assertTrue(res["verified"])
-        stats = self.tmp / "psnr.txt"
-        subprocess.run(["ffmpeg", "-v", "error", "-i", str(self.tmp / "sp_full.mp4"), "-i", str(self.tmp / "sp_sparse.mp4"),
-                        "-lavfi", f"[0:v][1:v]psnr=stats_file={stats.name}", "-f", "null", "-"],
-                       check=True, cwd=self.tmp)
-        rows = stats.read_text().split("\n")
-        differ = [r for r in rows if r.strip() and "psnr_avg:inf" not in r]
-        self.assertEqual(differ, [], "sparse output differs from the full-length layer")
+        opts = self.tmp / "titles.json"
+        opts.write_text(json.dumps({"sceneTitles": ["One", "Two"],
+                                    "lowerThirds": [{"text": "Name", "sub": "Role", "start": 5.5, "end": 7}]}))
+        for comp, extra in (("Captioned", []), ("Titled", ["--options", opts])):
+            with self.subTest(comp=comp):
+                full, sparse = self.tmp / f"sp_full_{comp}.mp4", self.tmp / f"sp_sparse_{comp}.mp4"
+                code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", self.tl,
+                                   "-o", full, "--overlay", "--no-look", *extra)
+                self.assertEqual(code, 0, res)
+                code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", self.tl,
+                                   "-o", sparse, "--sparse", "--merge-gap", "0", "--no-look", *extra)
+                self.assertEqual(code, 0, res)
+                if not res["sparse"]["used"]:
+                    self.skipTest(res["sparse"]["reason"])
+                self.assertTrue(res["verified"])
+                self.assertLess(res["sparse"]["drawn_frames"], res["sparse"]["source_frames"])
+                stats = self.tmp / f"psnr_{comp}.txt"
+                subprocess.run(["ffmpeg", "-v", "error", "-i", str(full), "-i", str(sparse),
+                                "-lavfi", f"[0:v][1:v]psnr=stats_file={stats.name}", "-f", "null", "-"],
+                               check=True, cwd=self.tmp)
+                differ = [r for r in stats.read_text().split("\n") if r.strip() and "psnr_avg:inf" not in r]
+                self.assertEqual(differ, [], f"{comp}: sparse output differs from the full-length layer")
 
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_renders_verify(self):
