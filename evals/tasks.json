@@ -1,40 +1,102 @@
 {
-  "about": "Agent evals: a natural-language request, run by an agent that has this skill (SKILL.md) and ffmpeg-skill; graded on the files it leaves and its final reply (grade.py). Media from make_fixtures.py.",
+  "about": "Agent evals: a natural-language request, run by an agent that has this skill (SKILL.md) and ffmpeg-skill; graded on the files it leaves and its final reply (grade.py). Media from make_fixtures.py. Video checks pass when any non-fixture video the agent made meets them (agents name files freely).",
   "tasks": [
     {
       "id": "captions-youtube",
       "prompt": "Put animated captions from talk.srt on talk.mp4 and make it ready to upload to YouTube.",
       "checks": [
-        {"type": "file", "glob": "*.timeline.json", "captions": 2},
-        {"type": "video", "glob": "*youtube*.mp4", "width": 1920, "height": 1080},
-        {"type": "reply_mentions", "any": ["sheet.png", "Look:"]},
-        {"type": "source_untouched", "file": "talk.mp4"}
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1920,
+          "height": 1080
+        },
+        {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:"
+          ]
+        },
+        {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        }
       ]
     },
     {
       "id": "jumpcut-reels-ja",
       "prompt": "talk.mp4 の無音をカットしてテンポよくして、talk_ja.srt の字幕も付けて、Instagram のリール用にして。",
       "checks": [
-        {"type": "file", "glob": "*.timeline.json", "captions": 2},
-        {"type": "video", "glob": "*reels*.mp4", "width": 1080, "height": 1920},
-        {"type": "video", "glob": "*Jumpcut*.mp4", "max_duration": 7.0},
-        {"type": "reply_mentions", "any": ["sheet.png", "Look:", "コマ"]}
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1080,
+          "height": 1920
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "max_duration": 7.0
+        },
+        {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:",
+            "コマ"
+          ]
+        }
       ]
     },
     {
       "id": "beat-montage",
       "prompt": "Make a montage of music.mp4 that cuts to the beat.",
       "checks": [
-        {"type": "file", "glob": "*.timeline.json", "beats_usable": true},
-        {"type": "video", "glob": "*BeatMontage*.mp4", "min_duration": 11.5}
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "beats_usable": true
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 11.5
+        }
       ]
     },
     {
       "id": "lower-third-asks-for-text",
       "prompt": "Add a lower third with the speaker's name to talk.mp4.",
       "checks": [
-        {"type": "reply_mentions", "any": ["name", "名前", "?", "？"]},
-        {"type": "no_file", "glob": "*Titled*.mp4", "unless_reply_has": ["Sample", "placeholder", "仮"]}
+        {
+          "type": "reply_mentions",
+          "any": [
+            "name",
+            "名前",
+            "?",
+            "？"
+          ]
+        },
+        {
+          "type": "no_file",
+          "glob": "*Titled*.mp4",
+          "unless_reply_has": [
+            "Sample",
+            "placeholder",
+            "仮"
+          ]
+        }
       ],
       "note": "The name is not given: the skill must ask (or clearly mark a placeholder), never invent a person."
     },
@@ -42,8 +104,14 @@
       "id": "plain-trim-not-this-skill",
       "prompt": "Trim the first 2 seconds off talk.mp4.",
       "checks": [
-        {"type": "no_file", "glob": "*.timeline.json"},
-        {"type": "no_dir", "glob": "*/src/index.ts"}
+        {
+          "type": "no_file",
+          "glob": "*.timeline.json"
+        },
+        {
+          "type": "no_dir",
+          "glob": "*/src/index.ts"
+        }
       ],
       "note": "No graphics involved: a plain cut belongs to ffmpeg-skill, not a Remotion render."
     },
@@ -51,8 +119,16 @@
       "id": "highlights-square",
       "prompt": "Make a square highlight reel of the best 2 moments of music.mp4 with the title 'Sample Reel'.",
       "checks": [
-        {"type": "file", "glob": "*.timeline.json", "min_highlights": 1},
-        {"type": "video", "glob": "*Highlights*.mp4", "square": true}
+        {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "min_highlights": 1
+        },
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "square": true
+        }
       ]
     }
   ]

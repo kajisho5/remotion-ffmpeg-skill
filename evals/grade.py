@@ -52,20 +52,26 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
                 ok = ok and len(data.get("highlights", [])) >= c["min_highlights"]
                 detail += f"; highlights={len(data.get('highlights', []))}"
     elif t == "video":
-        found = files(work, c["glob"])
+        fixtures = set(json.loads((work / FIXTURE_HASHES_FILE).read_text())) if (work / FIXTURE_HASHES_FILE).exists() else set()
+        found = [f for f in files(work, c["glob"]) if f.name not in fixtures]
         if not found:
-            return {"check": c, "ok": False, "detail": f"no video matching {c['glob']}"}
-        pr = probe(found[-1])
-        v = pr.get("video") or {}
-        w, h, d = v.get("width"), v.get("height"), float(pr.get("duration") or 0)
-        ok = pr.get("status") != "failed"
-        for key, cond in (("width", lambda: w == c["width"]), ("height", lambda: h == c["height"]),
-                          ("max_duration", lambda: d <= c["max_duration"]),
-                          ("min_duration", lambda: d >= c["min_duration"]),
-                          ("square", lambda: w == h)):
-            if key in c:
-                ok = ok and cond()
-        detail = f"{found[-1].name}: {w}x{h}, {d:.2f}s"
+            return {"check": c, "ok": False, "detail": f"no video made (matching {c['glob']})"}
+        seen = []
+        for f in found:
+            pr = probe(f)
+            v = pr.get("video") or {}
+            w, h, d = v.get("width"), v.get("height"), float(pr.get("duration") or 0)
+            good = pr.get("status") != "failed"
+            for key, cond in (("width", lambda: w == c["width"]), ("height", lambda: h == c["height"]),
+                              ("max_duration", lambda: d <= c["max_duration"]),
+                              ("min_duration", lambda: d >= c["min_duration"]),
+                              ("square", lambda: w == h)):
+                if key in c:
+                    good = good and cond()
+            seen.append(f"{f.name}: {w}x{h} {d:.2f}s")
+            if good:
+                return {"check": c, "ok": True, "detail": seen[-1]}
+        ok, detail = False, "none meets it: " + "; ".join(seen)
     elif t == "no_file":
         found = files(work, c["glob"])
         excused = any(s.lower() in reply.lower() for s in c.get("unless_reply_has", []))
