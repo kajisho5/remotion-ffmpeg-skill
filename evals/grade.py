@@ -89,6 +89,15 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
     elif t == "reply_mentions":
         hit = [s for s in c["any"] if s.lower() in reply.lower()]
         ok, detail = bool(hit), f"found {hit}" if hit else f"none of {c['any']}"
+    elif t == "any_of":
+        # Several valid routes (e.g. this skill's timeline, or ffmpeg-skill alone with the trade-off stated).
+        tried = []
+        for route in c["routes"]:
+            rs = [check(x, work, reply) for x in route["checks"]]
+            tried.append(f"{route['name']}: " + ", ".join(("ok " if r["ok"] else "NO ") + r["detail"] for r in rs))
+            if all(r["ok"] for r in rs):
+                return {"check": c, "ok": True, "detail": f"route {route['name']} ({tried[-1]})"}
+        ok, detail = False, "no route met: " + " | ".join(tried)
     elif t == "source_untouched":
         hashes = json.loads((work / FIXTURE_HASHES_FILE).read_text()) if (work / FIXTURE_HASHES_FILE).exists() else {}
         f = work / c["file"]

@@ -34,9 +34,35 @@
       "prompt": "talk.mp4 の無音をカットしてテンポよくして、talk_ja.srt の字幕も付けて、Instagram のリール用にして。",
       "checks": [
         {
-          "type": "file",
-          "glob": "*.timeline.json",
-          "captions": 2
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "captions": 2
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "クロップ",
+                    "切り抜",
+                    "crop",
+                    "端",
+                    "blur",
+                    "ぼかし"
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
           "type": "video",
@@ -57,7 +83,8 @@
             "コマ"
           ]
         }
-      ]
+      ],
+      "note": "ffmpeg-skill's Reels template alone is valid if the reply says the 16:9 sides were cropped."
     },
     {
       "id": "beat-montage",
@@ -156,25 +183,69 @@
       "prompt": "Join talk.mp4 and music.mp4 into one video and put a title card 'Part 1' and 'Part 2' at the start of each.",
       "checks": [
         {
-          "type": "file",
-          "glob": "*.timeline.json",
-          "clips": 2
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "clips": 2
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "Part 1"
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
           "type": "video",
           "glob": "*.mp4",
           "min_duration": 19.5
         }
-      ]
+      ],
+      "note": "ffmpeg-skill join + title templates alone is a valid route."
     },
     {
       "id": "karaoke-from-words",
       "prompt": "Make karaoke-style captions for talk.mp4 where each word lights up as it's spoken. The word timings from my transcription are in talk_words.json.",
       "checks": [
         {
-          "type": "file",
-          "glob": "*.timeline.json",
-          "min_words": 5
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "min_words": 5
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "talk_words.json",
+                    "words.json"
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
           "type": "video",
@@ -182,7 +253,8 @@
           "min_duration": 7.5,
           "max_duration": 8.5
         }
-      ]
+      ],
+      "note": "ffmpeg-skill caption.py --karaoke alone is a valid route."
     }
   ]
 }

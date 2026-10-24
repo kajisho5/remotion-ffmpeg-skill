@@ -29,6 +29,17 @@ MCP: `mcp/server.py` exposes the same tools (schemas from `scripts/_contract.py`
 
 Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--captions F] [--platform P]` runs 2→4→5 with the same checks and stops at the first failed step.
 
+## This skill or ffmpeg-skill alone?
+
+ffmpeg-skill by itself already does silence cuts, burned-in (also pop / karaoke) captions, title and lower-third templates, joins and platform templates, without a browser render. For a request that fits those, ffmpeg-skill alone is a valid and faster answer. Choose this skill when the request needs something ffmpeg-skill does not draw:
+
+- motion tied to measurements: punch-in zooms on jump cuts, pulses on peaks or beats, picture cuts on a beat grid, a highlight counter;
+- a different shape **without losing picture**: ffmpeg-skill's Reels / TikTok / Shorts templates centre-crop a 16:9 source (`fit: crop`), so the sides are cut off; `--aspect 9:16 --fit blur` keeps the whole frame;
+- the graphics as a separate transparent layer for an editor (`--overlay --keep-graphics`);
+- a custom React composition, or the user asks for Remotion.
+
+Whichever you choose, say which one and the trade-off that matters (for example "centre-cropped: the left and right edges are gone").
+
 ## Request → script / composition
 
 | Request | Run |

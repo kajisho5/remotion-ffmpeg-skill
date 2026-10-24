@@ -15,6 +15,12 @@ What the tasks probe:
 | `lower-third-asks-for-text` | no name given → asks for it (or clearly marks a placeholder), never invents a person |
 | `plain-trim-not-this-skill` | a plain trim is ffmpeg-skill's job: no timeline, no Remotion project |
 | `highlights-square` | highlights measured (`--highlights`) and a square Highlights render |
+| `graphics-layer-for-editor` | a transparent layer (alpha) matching the source |
+| `join-then-titles` | both clips in one video with the two titles (this skill's join, or ffmpeg-skill alone) |
+| `karaoke-from-words` | words lit at their measured times (Karaoke, or ffmpeg-skill `caption.py --karaoke`) |
+
+Where ffmpeg-skill alone is a valid answer, a task lists both routes in an `any_of` check; the
+ffmpeg-skill route has to state its trade-off where there is one (a centre-cropped Reel).
 
 ## Running
 

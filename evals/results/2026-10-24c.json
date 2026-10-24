@@ -1,0 +1,344 @@
+[
+  {
+    "task": "captions-youtube",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; captions=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1920,
+          "height": 1080
+        },
+        "ok": true,
+        "detail": "talk_Captioned_youtube.mp4: 1920x1080 8.00s yuv420p"
+      },
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['sheet.png', 'Look:']"
+      },
+      {
+        "check": {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        },
+        "ok": true,
+        "detail": "unchanged"
+      }
+    ]
+  },
+  {
+    "task": "jumpcut-reels-ja",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "captions": 2
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "クロップ",
+                    "切り抜",
+                    "crop",
+                    "端",
+                    "blur",
+                    "ぼかし"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "ok": true,
+        "detail": "route ffmpeg-skill alone (ffmpeg-skill alone: ok found ['クロップ', '切り抜', '端'])"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1080,
+          "height": 1920
+        },
+        "ok": true,
+        "detail": "talk_reels.mp4: 1080x1920 6.32s yuv420p"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "max_duration": 7.0
+        },
+        "ok": true,
+        "detail": "talk_reels.mp4: 1080x1920 6.32s yuv420p"
+      },
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:",
+            "コマ"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['sheet.png', 'Look:']"
+      }
+    ]
+  },
+  {
+    "task": "beat-montage",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "beats_usable": true
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; beats usable=True"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 11.5
+        },
+        "ok": true,
+        "detail": "music_beat_montage.mp4: 1280x720 12.01s yuv420p"
+      }
+    ]
+  },
+  {
+    "task": "lower-third-asks-for-text",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "name",
+            "名前",
+            "?",
+            "？"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['name']"
+      },
+      {
+        "check": {
+          "type": "no_file",
+          "glob": "*Titled*.mp4",
+          "unless_reply_has": [
+            "Sample",
+            "placeholder",
+            "仮"
+          ]
+        },
+        "ok": true,
+        "detail": "0 match(es) for *Titled*.mp4"
+      }
+    ]
+  },
+  {
+    "task": "plain-trim-not-this-skill",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "no_file",
+          "glob": "*.timeline.json"
+        },
+        "ok": true,
+        "detail": "0 match(es) for *.timeline.json"
+      },
+      {
+        "check": {
+          "type": "no_dir",
+          "glob": "*/src/index.ts"
+        },
+        "ok": true,
+        "detail": "0 Remotion project(s)"
+      }
+    ]
+  },
+  {
+    "task": "highlights-square",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "min_highlights": 1
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; highlights=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "square": true
+        },
+        "ok": true,
+        "detail": "sample_reel_square.mp4: 720x720 8.00s yuv420p"
+      }
+    ]
+  },
+  {
+    "task": "graphics-layer-for-editor",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; captions=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mov",
+          "alpha": true
+        },
+        "ok": true,
+        "detail": "talk.captioned.graphics.mov: 1280x720 8.00s yuva444p12le"
+      },
+      {
+        "check": {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        },
+        "ok": true,
+        "detail": "unchanged"
+      }
+    ]
+  },
+  {
+    "task": "join-then-titles",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "clips": 2
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "Part 1"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "ok": true,
+        "detail": "route ffmpeg-skill alone (ffmpeg-skill alone: ok found ['Part 1'])"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 19.5
+        },
+        "ok": true,
+        "detail": "joined_titled.mp4: 1280x720 20.01s yuv420p"
+      }
+    ]
+  },
+  {
+    "task": "karaoke-from-words",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "min_words": 5
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "talk_words.json",
+                    "words.json"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "ok": true,
+        "detail": "route ffmpeg-skill alone (ffmpeg-skill alone: ok found ['talk_words.json', 'words.json'])"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 7.5,
+          "max_duration": 8.5
+        },
+        "ok": true,
+        "detail": "talk_karaoke.mp4: 1280x720 8.01s yuv420p"
+      }
+    ]
+  }
+]

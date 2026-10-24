@@ -12,12 +12,12 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Transparent graphics layer (`--overlay --keep-graphics`)
 - ✅ Several inputs joined by ffmpeg-skill before measuring
 - ✅ Machine-readable contract + MCP server
-- ✅ Agent evals (6 tasks, grader, first run 6/6)
+- ✅ Agent evals (9 tasks, grader; three runs, the last with a neutral prompt and both routes accepted where ffmpeg-skill alone is valid)
 - ✅ Karaoke captions from word timings
 - ✅ CI on Linux, macOS and Windows with real renders
 
 ## Next
-- 🔜 More eval tasks (overlay layer, several inputs, options typos) and repeated runs
+- 🔜 Re-run the Reels task after the "this skill or ffmpeg-skill alone?" note; more tasks (options typos, long footage)
 - 🔜 Render only the captioned ranges for long footage — needs an ffmpeg-skill overlay that can start a layer at a time offset (upstream change)
 
 ## Ideas
