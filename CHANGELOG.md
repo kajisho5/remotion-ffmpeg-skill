@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- --brand reads ffmpeg-skill's brand.json
+
+
 ## 0.8.1 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
