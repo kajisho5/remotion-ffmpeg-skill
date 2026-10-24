@@ -25,6 +25,7 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `highlights` | `[{start, end}]` | scenes.py `--highlights` | ranked by audio energy, stored in source order (analyze.py `--highlights N [--target S]`) |
 | `clips` | `[{name, path, start, end}]` | analyze.py with several inputs | where each input sits after ffmpeg-skill join.py joined them (empty for one input) |
 | `captions` | `[{start, end, text}]` | your SRT / VTT / JSON, or grouped from `words` | text exactly as written, timed on the (joined) source |
+| `chapters` | `[{start, end, title}]` | `--chapters FILE` (`TIME TITLE` per line, YouTube's format) or `--chapters source` (the file's own markers) | titles as written; each ends where the next starts. YouTube's rules (first at 0:00, at least three, each ≥ 10 s) become warnings |
 | `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
 | `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
 
@@ -39,7 +40,7 @@ composition exactly.
 | `Captioned` | source duration | source + caption cards that spring in on each cue and fade out |
 | `Jumpcut` | sum of `speech` ranges | speech ranges back to back, punch-in zoom on every other cut, captions re-timed (parts inside removed silences dropped) |
 | `PeakPulse` | source duration | source + edge glow and slight zoom on each audio peak (scaled by its rms) or on each measured beat (`driver`), flash on scene cuts, progress bar with cut ticks |
-| `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) |
+| `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) + a chapter card at each chapter start (`chapters`, numbered n / total) |
 | `Highlights` | sum of `highlights` (whole file if none) | ranked ranges back to back in source order, flash on cuts, "2 / 5" counter, `title` over the first |
 | `Karaoke` | source duration | caption cues whose words light up at their measured times (current word accent + lift, spoken white, upcoming dimmed); cues without timed words show plain |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
@@ -63,6 +64,7 @@ Every key is optional.
 | `sceneTitles` | `[]` | Titled: one title per measured scene, in order |
 | `title` | `null` | Highlights: title over the first highlight |
 | `beatsPerCut` | `4` | BeatMontage: measured beats per shot |
+| `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.
 

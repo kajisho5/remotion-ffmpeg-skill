@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
                      require_ffmpeg_skill, shell_join, version)
-from _captions import CaptionError, cues_from_words, read_captions, read_words
+from _captions import CaptionError, cues_from_words, parse_chapters, read_captions, read_words, youtube_chapter_warnings
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--captions", help="SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written)")
     p.add_argument("--words", help="word timings from a speech engine (whisper JSON with word timestamps) for the "
                                     "Karaoke composition; without --captions the cues are grouped from these words")
+    p.add_argument("--chapters", metavar="FILE|source",
+                   help="chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill "
+                        "metadata.py --chapters writes into the container), or `source` for the chapters already "
+                        "in the input file; titles are kept as written")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
     p.add_argument("--highlights", type=int, metavar="N",
                    help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
@@ -202,6 +206,22 @@ def main() -> None:
         keep = [[round(float(s), 3), round(float(e), 3)] for s, e in si.get("keep", []) if float(e) > float(s)]
         speech = keep or speech
 
+    chapters: List[Dict[str, Any]] = []
+    if a.chapters == "source":
+        chapters = [{"start": round(float(c["start"] or 0), 3), "end": round(float(c["end"] or duration), 3),
+                     "title": str(c["title"]).strip()}
+                    for c in probe.get("chapters") or [] if str(c.get("title") or "").strip()]
+        if not chapters:
+            die(f"{src} has no titled chapters of its own (give a chapters file instead)", "input")
+    elif a.chapters:
+        chpath = Path(a.chapters).expanduser()
+        if not chpath.is_file():
+            die(f"chapters file not found: {chpath}", "input")
+        try:
+            chapters = parse_chapters(chpath.read_text(encoding="utf-8-sig"), duration)
+        except CaptionError as e:
+            die(f"{chpath}: {e}", "input")
+
     v = video or {}
     timeline: Dict[str, Any] = {
         "schema": TIMELINE_SCHEMA,
@@ -226,7 +246,8 @@ def main() -> None:
         "clips": clips,
         "captions": captions,
         "words": words,
-        "warnings": warnings_for(probe),
+        "chapters": chapters,
+        "warnings": warnings_for(probe) + youtube_chapter_warnings(chapters) if chapters else warnings_for(probe),
     }
     if not video:
         timeline["warnings"].append("audio-only source: width/height/fps default to 1920x1080 at 30 fps; "
@@ -243,7 +264,7 @@ def main() -> None:
                       "size": f"{timeline['source']['width']}x{timeline['source']['height']}",
                       "scenes": len(scenes), "silences": len(silences),
                       "speech_seconds": round(speech_total, 3), "peaks": len(peaks),
-                      "captions": len(captions), "beats": bool(beats and beats.get("usable")),
+                      "captions": len(captions), "chapters": len(chapters), "beats": bool(beats and beats.get("usable")),
                       "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
                       "clips": len(clips) or 1, "words": len(words)},
           "warnings": timeline["warnings"]},

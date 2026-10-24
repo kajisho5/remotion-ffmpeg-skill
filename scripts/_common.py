@@ -221,7 +221,7 @@ def validate_timeline(t: Any) -> List[str]:
             v = src.get(k)
             if not isinstance(v, (int, float)) or v <= 0:
                 p.append(f"source.{k} must be a positive number")
-    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words"):
+    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words", "chapters"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
     for i, c in enumerate(t.get("captions", []) or []):
@@ -510,7 +510,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "accent": str, "textColor": str, "fontFamily": str, "captionSize": (int, float),
     "captionMargin": (int, float, type(None)), "punchIn": (int, float), "pulse": (int, float),
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
-    "title": (str, type(None)), "beatsPerCut": int,
+    "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
 }
 
 
@@ -533,6 +533,9 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
                 and isinstance(lt.get("start"), (int, float)) and isinstance(lt.get("end"), (int, float))
                 and lt["end"] > lt["start"] and isinstance(lt.get("sub", ""), str)):
             p.append(f"lowerThirds[{i}] needs text, start < end (seconds) and an optional sub")
+    if isinstance(o.get("chapterSeconds"), (int, float)) and not isinstance(o["chapterSeconds"], bool) \
+            and o["chapterSeconds"] < 0:
+        p.append("chapterSeconds cannot be negative")
     if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
         p.append("sceneTitles must be a list of strings")
     return p

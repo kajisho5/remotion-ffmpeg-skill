@@ -70,7 +70,7 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "summary": "Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance check.",
         "writes": "deliverable video",
         "verification": "ffmpeg-skill check.py table; non-zero exit on any FAIL row",
-        "ffmpeg_skill": ["render --template", "check"],
+        "ffmpeg_skill": ["render --template", "metadata (--chapters)", "check"],
         "dry_run": True,
     },
     "pipeline": {
@@ -97,7 +97,7 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
 OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
     "analyze": {
         "result": {"commands": "list[str]", "verified": "bool", "summary": "object: duration, fps, size, scenes, "
-                   "silences, speech_seconds, peaks, captions, beats, tempo_bpm, highlights, clips, words",
+                   "silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words",
                    "warnings": "list[str]"},
         "dry_run": {"commands": "list[str]"},
     },
@@ -123,6 +123,7 @@ OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
     },
     "deliver": {
         "result": {"checked": "str", "platform": "str|null", "verified": "bool",
+                   "description": "str|null (YouTube description block with the chapters, --chapters)",
                    "checks": "list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)",
                    "failed": "list[str]", "warnings": "list[str]", "commands": "list[str]",
                    "kind": "null|failed", "error": "null|str"},

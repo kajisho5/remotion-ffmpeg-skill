@@ -25,6 +25,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--output` | string |  | timeline file (default: <name>.timeline.json) |
 | `--captions` | string |  | SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written) |
 | `--words` | string |  | word timings from a speech engine (whisper JSON with word timestamps) for the Karaoke composition; without --captions the cues are grouped from these words |
+| `--chapters` | string |  | chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill metadata.py --chapters writes into the container), or `source` for the chapters already in the input file; titles are kept as written |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
@@ -35,7 +36,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--margin` | number |  | seconds of silence kept around speech (default 0.15) |
 | `--scene-threshold` | number |  | scenes.py --threshold (default 8) |
 
---json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `verified` (bool), `summary` (object: duration, fps, size, scenes, silences, speech_seconds, peaks, captions, beats, tempo_bpm, highlights, clips, words), `warnings` (list[str])
+--json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `verified` (bool), `summary` (object: duration, fps, size, scenes, silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words), `warnings` (list[str])
 
 --dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
 
@@ -131,7 +132,7 @@ Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance c
 - Role: execution — writes a new media artifact; inputs are never modified
 - Writes: deliverable video
 - Verifies: ffmpeg-skill check.py table; non-zero exit on any FAIL row
-- ffmpeg-skill: render --template, check
+- ffmpeg-skill: render --template, metadata (--chapters), check
 - `--dry-run`: plans without writing
 
 | Argument | Type | Default | Meaning |
@@ -140,8 +141,9 @@ Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance c
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | ffmpeg-skill delivery template to run |
 | `--output` | string |  | deliverable path (default: <name>_<platform>.mp4) |
 | `--check-only` | boolean |  | run check.py only, write nothing |
+| `--chapters` | string |  | also write these chapters (`TIME TITLE` per line) into the deliverable with ffmpeg-skill metadata.py, plus the YouTube description block next to it (<name>_description.txt) |
 
---json result (besides `status`, `dry_run`, `output`): `checked` (str), `platform` (str|null), `verified` (bool), `checks` (list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)), `failed` (list[str]), `warnings` (list[str]), `commands` (list[str]), `kind` (null|failed), `error` (null|str)
+--json result (besides `status`, `dry_run`, `output`): `checked` (str), `platform` (str|null), `verified` (bool), `description` (str|null (YouTube description block with the chapters, --chapters)), `checks` (list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)), `failed` (list[str]), `warnings` (list[str]), `commands` (list[str]), `kind` (null|failed), `error` (null|str)
 
 --dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
 
@@ -161,6 +163,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--project (required)` | string |  | Remotion project folder made by init.py |
 | `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
+| `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |
 | `--out-dir` | string |  | where the timeline, render and deliverable go (default: next to the input) |

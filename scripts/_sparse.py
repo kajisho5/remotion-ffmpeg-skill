@@ -18,6 +18,8 @@ SPARSE_COMPOSITIONS = ("Captioned", "Karaoke", "Titled")
 MAX_STRETCHES = 400
 # Titled.tsx: a scene card lasts until the scene ends, at most this long.
 SCENE_CARD_SECONDS = 2.5
+# timeline.ts DEFAULT_OPTIONS.chapterSeconds
+CHAPTER_SECONDS = 4.0
 
 Layout = List[Tuple[int, int, int]]  # (packed_first_frame, length_frames, source_first_frame)
 
@@ -26,6 +28,12 @@ def _scene_card(sc: Dict[str, Any], fps: float) -> Tuple[int, int]:
     """[from, end) frames of a scene card, as Titled.tsx computes them."""
     s = sec_to_frames(sc["start"], fps)
     return s, s + max(1, min(sec_to_frames(sc["end"], fps), s + sec_to_frames(SCENE_CARD_SECONDS, fps)) - s)
+
+
+def _chapter_card(ch: Dict[str, Any], fps: float, seconds: float) -> Tuple[int, int]:
+    """[from, end) frames of a chapter card, as chapterCardFrames() in timeline.ts."""
+    s = sec_to_frames(ch["start"], fps)
+    return s, s + max(1, min(sec_to_frames(ch["end"], fps), s + sec_to_frames(seconds, fps)) - s)
 
 
 def drawn_intervals(comp: str, timeline: Dict[str, Any], options: Optional[Dict[str, Any]] = None) -> List[Tuple[int, int]]:
@@ -45,6 +53,9 @@ def drawn_intervals(comp: str, timeline: Dict[str, Any], options: Optional[Dict[
         for lt in o.get("lowerThirds") or []:
             s = sec_to_frames(lt["start"], fps)
             out.append((s, s + max(1, sec_to_frames(lt["end"], fps) - s)))
+        seconds = float(o.get("chapterSeconds", CHAPTER_SECONDS))
+        if seconds > 0:
+            out += [_chapter_card(ch, fps, seconds) for ch in timeline.get("chapters") or []]
     return out
 
 
@@ -120,6 +131,15 @@ def pack(timeline: Dict[str, Any], spans: List[Tuple[int, int]],
                 continue
         scenes.append({"start": 0.0, "end": 1.0 / fps})
     tl["scenes"] = scenes if any(titles) else []
+    # a chapter keeps its card length (its end moves to the card's end) and its place in "n / of"
+    seconds = float(opts.get("chapterSeconds", CHAPTER_SECONDS))
+    chapters = []
+    for ch in timeline.get("chapters") or []:
+        s, e = _chapter_card(ch, fps, seconds) if seconds > 0 else (0, 1)
+        k = offset(ch["start"]) if seconds > 0 else None
+        chapters.append({**ch, "start": (s - k) / fps, "end": (e - k) / fps} if k is not None
+                        else {**ch, "start": 0.0, "end": 1.0 / fps})
+    tl["chapters"] = chapters if seconds > 0 else []
     # nothing else is drawn; measurements on the source clock would only mislead
     for key in ("silences", "speech", "peaks", "highlights", "clips"):
         tl[key] = []

@@ -241,6 +241,33 @@ class TemplateParity(unittest.TestCase):
             self.assertIn(f'id="{comp}"', root)
 
 
+class Chapters(unittest.TestCase):
+    def test_youtube_format_kept_as_written(self):
+        ch = _captions.parse_chapters("0:00 Intro\n1:05 - Setup and tools\n# comment\n\n1:02:03.5 Q&A\n", 4000)
+        self.assertEqual([(c["start"], c["title"]) for c in ch], [(0, "Intro"), (65, "Setup and tools"), (3723.5, "Q&A")])
+        self.assertEqual([c["end"] for c in ch], [65, 3723.5, 4000])
+
+    def test_refusals(self):
+        for text in ("0:00\n", "1:00 B\n0:30 A\n", "0:00 A\n99:00 B\n", "x Intro\n", "", "1:2:3:4 A\n"):
+            with self.subTest(text=text), self.assertRaises(_captions.CaptionError):
+                _captions.parse_chapters(text, 600)
+
+    def test_youtube_rules_are_warnings(self):
+        ok = _captions.parse_chapters("0:00 A\n0:10 B\n0:20 C\n", 30)
+        self.assertEqual(_captions.youtube_chapter_warnings(ok), [])
+        bad = _captions.parse_chapters("0:05 A\n0:09 B\n", 30)
+        w = " ".join(_captions.youtube_chapter_warnings(bad))
+        self.assertIn("0:00", w)
+        self.assertIn("three", w)
+        self.assertIn("10 s", w)
+
+    def test_option_and_parity(self):
+        self.assertEqual(_common.validate_options({"chapterSeconds": 3}), [])
+        self.assertTrue(_common.validate_options({"chapterSeconds": -1}))
+        ts = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/timeline.ts").read_text()
+        self.assertIn(f"chapterSeconds: {_sparse.CHAPTER_SECONDS:g},", ts)
+
+
 class Sparse(unittest.TestCase):
     T = {"source": {"fps": 30.0, "duration": 60.0},
          "captions": [{"start": 1, "end": 3, "text": "a"}, {"start": 3.5, "end": 5, "text": "b"},
@@ -292,6 +319,18 @@ class Sparse(unittest.TestCase):
         self.assertEqual(_common.sec_to_frames(opts["lowerThirds"][0]["start"], 30.0), 106)
         self.assertEqual(opts["lowerThirds"][0]["text"], "Name")
         self.assertEqual(o["lowerThirds"][0]["start"], 40)  # the caller's options are not changed
+
+    def test_chapter_cards_are_drawn_and_moved(self):
+        t = {"source": {"fps": 30.0, "duration": 100.0}, "captions": [], "scenes": [],
+             "chapters": [{"start": 0, "end": 2, "title": "A"}, {"start": 2, "end": 50, "title": "B"},
+                          {"start": 50, "end": 100, "title": "C"}]}
+        spans = _sparse.plan_stretches("Titled", t, {}, 0.0)
+        self.assertEqual(spans, [(0, 180), (1500, 1620)])  # A (2 s) touches B's 4 s card
+        tl, _, layout = _sparse.pack(t, spans, {})
+        self.assertEqual([_common.sec_to_frames(c["start"], 30.0) for c in tl["chapters"]], [0, 60, 181])
+        self.assertEqual([_common.sec_to_frames(c["end"], 30.0) for c in tl["chapters"]], [60, 180, 301])
+        self.assertEqual([c["title"] for c in tl["chapters"]], ["A", "B", "C"])
+        self.assertEqual(_sparse.plan_stretches("Titled", t, {"chapterSeconds": 0}, 0.0), [])
 
     def test_scene_card_length_matches_titled_tsx(self):
         tsx = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/compositions/Titled.tsx").read_text()

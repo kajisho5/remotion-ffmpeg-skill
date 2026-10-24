@@ -7,7 +7,7 @@ shortens or paraphrases caption words -- the same rule as ffmpeg-skill.
 import json
 import re
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 _TS = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})")
 _ARROW = re.compile(r"^\s*(\S+)\s+-->\s+(\S+)")
@@ -139,3 +139,62 @@ def cues_from_words(words: List[Dict], max_chars: int = 32, max_gap: float = 0.7
 
 def _cue(ws: List[Dict]) -> Dict:
     return {"start": ws[0]["start"], "end": ws[-1]["end"], "text": "".join(w["text"] for w in ws).strip()}
+
+
+# ---------------------------------------------------------------- chapters
+
+def _chapter_time(tok: str) -> float:
+    """seconds, mm:ss or hh:mm:ss (with optional .ms) -- the syntax of ffmpeg-skill's chapters.txt."""
+    parts = tok.split(":")
+    if not 1 <= len(parts) <= 3 or not all(p.replace(".", "", 1).isdigit() for p in parts):
+        raise CaptionError(f"not a time: {tok!r} (use 0:00, 2:15 or 1:03:00)")
+    if any("." in p for p in parts[:-1]):
+        raise CaptionError(f"not a time: {tok!r}")
+    v = 0.0
+    for p in parts:
+        v = v * 60 + float(p)
+    return v
+
+
+def parse_chapters(text: str, duration: float) -> List[Dict[str, Any]]:
+    """`TIME TITLE` per line (YouTube's description format, ffmpeg-skill metadata.py's chapters.txt)
+    -> [{start, end, title}]. Titles are the user's text: a line without one is an error, never
+    a made-up "Chapter 2"."""
+    out: List[Dict[str, Any]] = []
+    for n, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        start = _chapter_time(parts[0])
+        title = parts[1].strip() if len(parts) > 1 else ""
+        # "0:00 - Intro" / "0:00 – Intro": the separator is not part of the title
+        for sep in ("- ", "– ", "— ", ": "):
+            if title.startswith(sep):
+                title = title[len(sep):].strip()
+        if not title:
+            raise CaptionError(f"line {n}: chapter at {parts[0]} has no title")
+        if out and start <= out[-1]["start"]:
+            raise CaptionError(f"line {n}: chapter at {parts[0]} does not come after the previous one")
+        if duration and start >= duration:
+            raise CaptionError(f"line {n}: chapter at {parts[0]} starts at or after the end ({duration:.3f} s)")
+        out.append({"start": start, "title": title})
+    if not out:
+        raise CaptionError("no chapters found (one per line: `0:00 Intro`)")
+    for i, c in enumerate(out):
+        c["end"] = out[i + 1]["start"] if i + 1 < len(out) else duration
+    return out
+
+
+def youtube_chapter_warnings(chapters: List[Dict[str, Any]]) -> List[str]:
+    """YouTube only turns a description list into chapters when the first is at 0:00, there are at
+    least three, and each lasts at least 10 seconds."""
+    w = []
+    if chapters and chapters[0]["start"] != 0:
+        w.append("chapters: the first does not start at 0:00, so YouTube will not show them as chapters")
+    if len(chapters) < 3:
+        w.append("chapters: fewer than three, so YouTube will not show them as chapters")
+    short = [c["title"] for c in chapters if c["end"] - c["start"] < 10]
+    if short:
+        w.append("chapters shorter than 10 s (YouTube ignores the list): " + ", ".join(short))
+    return w

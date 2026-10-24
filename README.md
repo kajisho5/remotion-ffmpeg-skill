@@ -46,6 +46,7 @@ npx remotion-ffmpeg-skill     # this skill, next to it in ~/.claude/skills
 - "Put animated captions from `talk.srt` on `talk.mp4` and make it a YouTube upload."
 - "Cut the silences out of this recording, jump-cut style, and keep the subtitles in sync."
 - "Make graphics that hit on the loud moments of `clip.mp4`, as a Reel."
+- "Here are my chapters (`0:00 Intro` …): put them on screen and make it a YouTube upload." — a card at each chapter start, chapter markers in the file, and the description block to paste.
 - "Japanese captions, vertical, for TikTok." — renders 9:16 with a blurred fill, stages a CJK font automatically, breaks lines between phrases.
 
 ## Under the hood
@@ -80,7 +81,7 @@ Tool names and input schemas come from the machine-readable contract (`npx remot
 | `Captioned` | source duration | caption cards that spring in on each cue (text exactly as written) |
 | `Jumpcut` | sum of measured speech ranges | silences removed, punch-in on every other cut, captions re-timed |
 | `PeakPulse` | source duration | edge glow + zoom on measured audio peaks or beats, flash on scene cuts, progress bar |
-| `Titled` | source duration | your lower thirds + a title card at each measured scene change |
+| `Titled` | source duration | your lower thirds, a title card at each measured scene change, a card at each chapter start |
 | `Highlights` | sum of ranked highlights | ffmpeg-skill's audio-energy highlights back to back, counter, title |
 | `BeatMontage` | source duration | audio unbroken, picture cuts on the measured beat grid |
 | `Karaoke` | source duration | words light up at the times a local speech engine measured |

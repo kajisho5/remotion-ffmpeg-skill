@@ -148,6 +148,33 @@ class Analyze(unittest.TestCase):
         else:
             self.assertIn("--place", sp["reason"])
 
+    def test_chapters_from_a_file_and_from_the_source(self):
+        chf = self.tmp / "chapters.txt"
+        chf.write_text("0:00 Placeholder opening\n0:04 Placeholder second part\n", encoding="utf-8")
+        tl = self.tmp / "ch.timeline.json"
+        code, res = script("analyze", self.src, "--chapters", chf, "-o", tl)
+        self.assertEqual(code, 0, res)
+        self.assertEqual(res["summary"]["chapters"], 2)
+        self.assertTrue(any("three" in w for w in res["warnings"]))  # YouTube needs three
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual([c["title"] for c in t["chapters"]], ["Placeholder opening", "Placeholder second part"])
+        self.assertAlmostEqual(t["chapters"][-1]["end"], 8.0, places=1)
+        # deliver writes them into the file and the description block next to it
+        out = self.tmp / "ch_youtube.mp4"
+        code, res = script("deliver", self.src, "--platform", "youtube", "--chapters", chf, "-o", out)
+        self.assertEqual(code, 0, res)
+        self.assertEqual((self.tmp / "ch_youtube_description.txt").read_text(encoding="utf-8"),
+                         "00:00 Placeholder opening\n00:04 Placeholder second part\n")
+        # and analyze reads chapters a file already carries
+        tl2 = self.tmp / "ch2.timeline.json"
+        code, res = script("analyze", out, "--chapters", "source", "-o", tl2)
+        self.assertEqual(code, 0, res)
+        t2 = json.loads(tl2.read_text(encoding="utf-8"))
+        self.assertEqual([(round(c["start"], 1), c["title"]) for c in t2["chapters"]],
+                         [(0.0, "Placeholder opening"), (4.0, "Placeholder second part")])
+        code, res = script("analyze", self.src, "--chapters", "source", "-o", self.tmp / "none.json")
+        self.assertEqual((code, res["kind"]), (2, "input"))
+
     def test_several_inputs_are_joined_then_measured(self):
         b = self.tmp / "b.mp4"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=2",

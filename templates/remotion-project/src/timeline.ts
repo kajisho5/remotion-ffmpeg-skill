@@ -18,6 +18,7 @@ export type Source = {
 };
 
 export type Caption = { start: number; end: number; text: string };
+export type Chapter = { start: number; end: number; title: string };
 export type Beats = { times: number[]; tempo_bpm: number | null; confidence: number | null; usable: boolean };
 export type Highlight = { start: number; end: number };
 /** A lower third: text from the user (options), timing in source seconds. */
@@ -39,6 +40,8 @@ export type Timeline = {
   captions: Caption[];
   /** Word timings from a speech engine (analyze.py --words), text with the engine's own spacing. */
   words?: Caption[];
+  /** Chapters from the user's list or the source's own markers (analyze.py --chapters); titles as written. */
+  chapters?: Chapter[];
   warnings?: string[];
 };
 
@@ -67,6 +70,8 @@ export type Options = {
   title: string | null;
   /** BeatMontage: cut the picture every N measured beats. */
   beatsPerCut: number;
+  /** Titled: seconds a chapter card stays up at the start of each chapter (0 = no chapter cards). */
+  chapterSeconds: number;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -83,6 +88,13 @@ export const DEFAULT_OPTIONS: Options = {
   sceneTitles: [],
   title: null,
   beatsPerCut: 4,
+  chapterSeconds: 4,
+};
+
+/** [from, durationInFrames] of the card at the start of a chapter (Titled). render.py mirrors this. */
+export const chapterCardFrames = (c: Chapter, fps: number, seconds: number): [number, number] => {
+  const from = secToFrames(c.start, fps);
+  return [from, Math.max(1, Math.min(secToFrames(c.end, fps), from + Math.round(fps * seconds)) - from)];
 };
 
 /**

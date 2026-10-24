@@ -15,6 +15,7 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Agent evals (12 tasks, grader; three runs, the last with a neutral prompt and both routes accepted where ffmpeg-skill alone is valid)
 - ✅ Karaoke captions from word timings
 - ✅ CI on Linux, macOS and Windows with real renders
+- ✅ Chapters: cards in Titled from a YouTube-style list or the file's own markers; markers + description block on delivery
 - ✅ `--sparse`: draw only the stretches of long footage where captions, lower thirds or scene titles show (uses ffmpeg-skill `overlay.py --place`; falls back to the full layer without it)
 
 ## Next
@@ -22,7 +23,6 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 
 ## Ideas
 - 💡 Brand file (`brand.json`, shared with ffmpeg-skill) for colours, fonts and logo
-- 💡 Chapter cards from YouTube chapter lists
 - 💡 Picture-in-picture from a second measured source (screen + camera)
 - 💡 Speaker-change captions colouring (needs diarisation from a local engine)
 - 💡 Remotion Lambda rendering for long jobs (opt-in, needs the user's AWS)
