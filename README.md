@@ -94,6 +94,8 @@ Tool names and input schemas come from the machine-readable contract (`npx remot
 
 **A layer for your editor:** `--overlay --keep-graphics` renders the graphics alone as transparent ProRes 4444 and composites it over the untouched source with ffmpeg-skill — keep the `.mov` for Premiere, Resolve or Final Cut.
 
+**One brand file for both skills:** `--brand brand.json` reads ffmpeg-skill's own brand file — colours, caption colour, font, font file — and on delivery the template places its logo, so graphics drawn here match what ffmpeg-skill draws.
+
 Colours, font, caption size, zoom and pulse strength are options (`--options look.json`); the timeline format and every option are in [`references/timeline.md`](references/timeline.md). Add your own composition to the generated project and render it with `--comp YourId`.
 
 ### What render.py verifies

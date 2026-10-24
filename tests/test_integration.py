@@ -148,6 +148,18 @@ class Analyze(unittest.TestCase):
         else:
             self.assertIn("--place", sp["reason"])
 
+    def test_brand_logo_goes_to_the_template(self):
+        bdir = self.tmp / "brand"
+        bdir.mkdir(exist_ok=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x1E6F8E:s=64x64",
+                        "-frames:v", "1", str(bdir / "logo.png")], check=True)
+        (bdir / "brand.json").write_text('{"colors": {"primary": "E53935"}, "logo": "logo.png"}', encoding="utf-8")
+        code, res = script("deliver", self.src, "--platform", "youtube", "--brand", bdir / "brand.json",
+                           "-o", self.tmp / "b.mp4", "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertIn("--logo", res["commands"][0])
+        self.assertIn(str((bdir / "logo.png").resolve()), res["commands"][0])
+
     def test_deliver_without_chapters(self):
         out = self.tmp / "plain_youtube.mp4"
         code, res = script("deliver", self.src, "--platform", "youtube", "-o", out)

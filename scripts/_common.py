@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -472,6 +473,8 @@ def add_frame_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--fit", choices=FITS, help="how the source fills another shape: blur (default when the shape "
                                                 "changes), contain (bars) or cover (crop)")
     g.add_argument("--font-file", help="caption font file (.ttf/.otf/.ttc/.woff2), staged into the project")
+    g.add_argument("--brand", help="ffmpeg-skill brand.json: its colours, caption colour, font and font file set "
+                                   "the look (an --options file still wins key by key)")
     g.add_argument("--no-auto-font", action="store_true",
                    help="don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions")
 
@@ -485,6 +488,78 @@ def prepare_props(project: Path, comp: str, timeline: Dict[str, Any], options: D
     font, note = resolve_font(project, timeline, a.font_file, not a.no_auto_font)
     props_path, _ = write_props(project, comp, timeline, options, frame, font, bool(getattr(a, "overlay", False)))
     return props_path, frame, note
+
+
+# Mirrors DEFAULT_OPTIONS.fontFamily in src/timeline.ts: a brand font goes in front of it, so CJK
+# and other scripts still fall back to a font that has them.
+DEFAULT_FONT_STACK = ("'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans', 'Helvetica Neue', Arial, "
+                      "sans-serif")
+
+
+def _hex_colour(v: Any, where: str) -> str:
+    s = str(v).strip()
+    for prefix in ("#", "0x", "0X", "&H"):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", s):
+        die(f"{where}: {v!r} is not a colour (use RRGGBB, as ffmpeg-skill's brand.json does)", "input")
+    return "#" + s.upper()
+
+
+def brand_look(path: str) -> Tuple[Dict[str, Any], Optional[str], List[str]]:
+    """ffmpeg-skill brand.json -> (options, font file, notes). Only what the file itself states is
+    used: ffmpeg-skill fills in defaults for the rest, and those are not the user's choice."""
+    bp = Path(path).expanduser()
+    if not bp.is_file():
+        die(f"brand file not found: {bp}", "input")
+    try:
+        data = json.loads(bp.read_text(encoding="utf-8"))
+    except ValueError as e:
+        die(f"{bp} is not valid JSON: {e}", "input")
+    if not isinstance(data, dict):
+        die(f"{bp} must hold a JSON object", "input")
+    opts: Dict[str, Any] = {}
+    colours = data.get("colors") or data.get("colours") or {}
+    if colours.get("primary"):
+        opts["accent"] = _hex_colour(colours["primary"], f"{bp.name} colors.primary")
+    if colours.get("text"):
+        opts["textColor"] = _hex_colour(colours["text"], f"{bp.name} colors.text")
+    # the caption block, with styles.caption winning (ffmpeg-skill's brand_caption_style)
+    style = dict(data.get("caption") or {})
+    style.update((data.get("styles") or {}).get("caption") or {})
+    colour = style.get("color", style.get("colour"))
+    if colour:
+        opts["textColor"] = _hex_colour(colour, f"{bp.name} caption colour")
+    font = style.get("font") or data.get("font")
+    if font:
+        opts["fontFamily"] = f"'{str(font).strip()}', {DEFAULT_FONT_STACK}"
+    font_file = data.get("font_file")
+    if font_file:
+        ff = Path(font_file).expanduser()
+        font_file = str(ff if ff.is_absolute() else (bp.resolve().parent / ff))
+        if not Path(font_file).is_file():
+            die(f"{bp.name} font_file not found: {font_file}", "input")
+    notes = []
+    if data.get("logo"):
+        notes.append("brand logo: placed on delivery (deliver.py / pipeline.py --brand), not in the composition")
+    unused = [k for k in ("size", "position", "animate", "box", "outline") if k in style]
+    if unused:
+        notes.append("brand caption " + ", ".join(unused) + ": ffmpeg-skill caption settings, not used by the "
+                     "compositions (captionSize / captionMargin in --options set those)")
+    return opts, font_file, notes
+
+
+def load_look(a: argparse.Namespace) -> Dict[str, Any]:
+    """Options for render.py / still.py: the brand file's look, then --options over it."""
+    options = load_options(a.options)
+    if not getattr(a, "brand", None):
+        return options
+    b, font_file, notes = brand_look(a.brand)
+    for n in notes:
+        info(n)
+    if font_file and not a.font_file:
+        a.font_file = font_file
+    return {**b, **options}
 
 
 def load_options(path: Optional[str]) -> Dict[str, Any]:

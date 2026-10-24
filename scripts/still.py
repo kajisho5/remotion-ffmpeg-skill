@@ -14,7 +14,7 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit,
-                     expected_frames, info, load_options, load_timeline, prepare_props, refuse_existing, remotion_bin,
+                     expected_frames, info, load_look, load_timeline, prepare_props, refuse_existing, remotion_bin,
                      require_project, remotion_error, run, sec_to_frames, shell_join)
 
 
@@ -39,7 +39,7 @@ def main() -> None:
     tl_path = Path(a.timeline).expanduser()
     timeline = load_timeline(tl_path)
     project = require_project(Path(a.project).expanduser(), need_install=not STATE.dry_run)
-    options = load_options(a.options)
+    options = load_look(a)
     fps = float(timeline["source"]["fps"])
 
     frames: List[int] = list(a.frame) + [sec_to_frames(t, fps) for t in a.at]

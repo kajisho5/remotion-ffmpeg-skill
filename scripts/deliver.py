@@ -10,8 +10,10 @@ Examples:
   python3 deliver.py titled.mp4 --platform youtube --chapters chapters.txt   # + chapter markers
 """
 import argparse
+import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _captions import parse_chapters
@@ -20,6 +22,21 @@ from _common import (STATE, add_common, apply_common, default_output, die, emit,
 
 # ffmpeg-skill's templates/*.json names (render.py --list-templates).
 PLATFORMS = ["youtube", "youtube-shorts", "shorts", "reels", "tiktok", "x", "facebook", "linkedin", "podcast", "audiogram"]
+
+
+def brand_logo(brand: Optional[str]) -> Optional[Path]:
+    """The brand file's logo, relative to the brand file as ffmpeg-skill reads it."""
+    if not brand:
+        return None
+    bp = Path(brand).expanduser()
+    try:
+        logo = json.loads(bp.read_text(encoding="utf-8")).get("logo")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not logo:
+        return None
+    lp = Path(logo).expanduser()
+    return lp if lp.is_absolute() else bp.resolve().parent / lp
 
 
 def youtube_description(chapters_file: Path) -> str:
@@ -42,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", help="deliverable path (default: <name>_<platform>.mp4)")
     p.add_argument("--check-only", action="store_true", help="run check.py only, write nothing")
     p.add_argument("--brand", help="ffmpeg-skill brand.json for the template (its logo, safe margins, loudness)")
+    p.add_argument("--logo", help="logo image the template places (default: the brand file's logo)")
     p.add_argument("--chapters", metavar="FILE",
                    help="also write these chapters (`TIME TITLE` per line) into the deliverable with ffmpeg-skill "
                         "metadata.py, plus the YouTube description block next to it (<name>_description.txt)")
@@ -70,9 +88,15 @@ def main() -> None:
         templated = out.with_name(out.stem + ".nochapters" + out.suffix) if a.chapters else out
         args = ["--template", a.platform, str(src), "-o", str(templated)]
         if a.brand:
-            if not Path(a.brand).expanduser().is_file():
+            bp = Path(a.brand).expanduser().resolve()
+            if not bp.is_file():
                 die(f"brand file not found: {a.brand}", "input")
-            args += ["--brand", str(Path(a.brand).expanduser().resolve())]
+            args += ["--brand", str(bp)]
+        logo = Path(a.logo).expanduser() if a.logo else brand_logo(a.brand)
+        if logo:
+            if not logo.is_file():
+                die(f"logo not found: {logo}", "input")
+            args += ["--logo", str(logo.resolve())]
         if STATE.overwrite or a.chapters:
             args.append("--overwrite")
         description = out.with_name(out.stem + "_description.txt")

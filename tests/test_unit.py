@@ -241,6 +241,50 @@ class TemplateParity(unittest.TestCase):
             self.assertIn(f'id="{comp}"', root)
 
 
+class Brand(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.d = Path(tempfile.mkdtemp(prefix="rfs-brand-"))
+        (self.d / "fonts").mkdir()
+        (self.d / "fonts" / "House.ttf").write_bytes(b"\0")
+
+    def write(self, data):
+        p = self.d / "brand.json"
+        p.write_text(__import__("json").dumps(data), encoding="utf-8")
+        return str(p)
+
+    def test_only_what_the_file_states(self):
+        opts, ff, notes = _common.brand_look(self.write({
+            "colors": {"primary": "E53935", "text": "#f5f5f5"}, "font": "House Sans",
+            "font_file": "fonts/House.ttf", "logo": "logo.png",
+            "styles": {"caption": {"colour": "0xFFEE00", "size": 30}}}))
+        self.assertEqual(opts["accent"], "#E53935")
+        self.assertEqual(opts["textColor"], "#FFEE00")  # the caption colour wins over colors.text
+        self.assertTrue(opts["fontFamily"].startswith("'House Sans', 'Noto Sans JP'"))
+        self.assertEqual(ff, str((self.d / "fonts" / "House.ttf").resolve()))
+        self.assertTrue(any("logo" in n for n in notes) and any("size" in n for n in notes))
+        self.assertEqual(_common.validate_options(opts), [])
+        self.assertEqual(_common.brand_look(self.write({"loudness": {"lufs": -16}}))[0], {})
+
+    def test_options_win_and_font_file_flag_wins(self):
+        a = argparse.Namespace(options=None, brand=self.write({"colors": {"primary": "112233"},
+                                                                 "font_file": "fonts/House.ttf"}),
+                               font_file="/explicit.ttf")
+        opt = self.d / "o.json"
+        opt.write_text('{"accent": "#000000"}', encoding="utf-8")
+        a.options = str(opt)
+        self.assertEqual(_common.load_look(a)["accent"], "#000000")
+        self.assertEqual(a.font_file, "/explicit.ttf")
+
+    def test_bad_colour_is_refused(self):
+        with self.assertRaises(SystemExit):
+            _common.brand_look(self.write({"colors": {"primary": "red"}}))
+
+    def test_font_stack_matches_typescript(self):
+        ts = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/timeline.ts").read_text()
+        self.assertIn(f'fontFamily: "{_common.DEFAULT_FONT_STACK}",', ts)
+
+
 class Chapters(unittest.TestCase):
     def test_youtube_format_kept_as_written(self):
         ch = _captions.parse_chapters("0:00 Intro\n1:05 - Setup and tools\n# comment\n\n1:02:03.5 Q&A\n", 4000)

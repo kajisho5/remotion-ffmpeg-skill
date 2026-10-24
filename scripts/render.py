@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _sparse
 from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
-                     ffskill, ffskill_cmd, frame_size, info, load_options, load_timeline, prepare_props, refuse_existing,
+                     ffskill, ffskill_cmd, frame_size, info, load_look, load_timeline, prepare_props, refuse_existing,
                      remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
 
 
@@ -187,7 +187,7 @@ def main() -> None:
     timeline_path = Path(a.timeline).expanduser()
     timeline = load_timeline(timeline_path)
     project = require_project(Path(a.project).expanduser(), need_install=not STATE.dry_run)
-    options = load_options(a.options)
+    options = load_look(a)
     frames = parse_frames(a.frames)
     require_ffmpeg_skill()
 

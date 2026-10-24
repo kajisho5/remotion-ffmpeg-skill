@@ -32,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter "
                         "markers in the deliverable")
     p.add_argument("--options", help="JSON options file passed to the composition")
+    p.add_argument("--brand", help="ffmpeg-skill brand.json: the look of the graphics and, on delivery, the logo")
     p.add_argument("--platform", choices=PLATFORMS, help="deliver with this ffmpeg-skill template and check it")
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
@@ -101,14 +102,14 @@ def main() -> None:
     aspect = a.aspect or platform_aspect(a.platform)
     if aspect:
         r_args += ["--aspect", aspect]
-    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file)):
+    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file), ("--brand", a.brand)):
         if val is not None:
             r_args += [flag, str(val)]
     rendered = step("draw", "render", r_args, steps)
 
     delivered = None
     if a.platform:
-        de_args = [str(render_out), "--platform", a.platform]
+        de_args = [str(render_out), "--platform", a.platform] + (["--brand", a.brand] if a.brand else [])
         # chapter markers only when the picture keeps the source's clock (cuts would move every chapter)
         if a.chapters and a.chapters != "source" and a.comp not in ("Jumpcut", "Highlights"):
             de_args += ["--chapters", a.chapters]

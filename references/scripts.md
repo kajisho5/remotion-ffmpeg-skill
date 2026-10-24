@@ -82,6 +82,7 @@ Render single frames as PNG to check the look before a full render.
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
+| `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
 --json result (besides `status`, `dry_run`, `output`): `outputs` (list[str] (PNG paths)), `frames` (list[int]), `commands` (list[str]), `verified` (bool), `frame` (object|null {width, height, fit}), `font` (str|null)
@@ -119,6 +120,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
+| `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
 --json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `sparse` (null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)), `kind` (null|failed), `error` (null|str (which verification rows failed))
@@ -141,6 +143,8 @@ Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance c
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | ffmpeg-skill delivery template to run |
 | `--output` | string |  | deliverable path (default: <name>_<platform>.mp4) |
 | `--check-only` | boolean |  | run check.py only, write nothing |
+| `--brand` | string |  | ffmpeg-skill brand.json for the template (its logo, safe margins, loudness) |
+| `--logo` | string |  | logo image the template places (default: the brand file's logo) |
 | `--chapters` | string |  | also write these chapters (`TIME TITLE` per line) into the deliverable with ffmpeg-skill metadata.py, plus the YouTube description block next to it (<name>_description.txt) |
 
 --json result (besides `status`, `dry_run`, `output`): `checked` (str), `platform` (str|null), `verified` (bool), `description` (str|null (YouTube description block with the chapters, --chapters)), `checks` (list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)), `failed` (list[str]), `warnings` (list[str]), `commands` (list[str]), `kind` (null|failed), `error` (null|str)
@@ -165,6 +169,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
 | `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |
+| `--brand` | string |  | ffmpeg-skill brand.json: the look of the graphics and, on delivery, the logo |
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |
 | `--out-dir` | string |  | where the timeline, render and deliverable go (default: next to the input) |
 | `--beats` | boolean |  | measure the beat grid too |

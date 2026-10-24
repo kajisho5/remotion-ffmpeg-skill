@@ -58,6 +58,7 @@ Changing the shape alone is not a reason: ffmpeg-skill's Reels / TikTok / Shorts
 | "give me the graphics as a separate layer" | `render.py --overlay --keep-graphics` |
 | captions or name titles on long footage (a talk, a lecture) | `render.py --comp Captioned --sparse` (or `Karaoke`, `Titled`): only the stretches where something shows are drawn |
 | "change colour / font / caption size / zoom" | an `--options` JSON (`references/timeline.md`), re-render |
+| "use our brand" / a `brand.json` (ffmpeg-skill's format) | `--brand brand.json` on render / still / pipeline: its colours, caption colour, font and font file set the look (an `--options` file wins key by key); `deliver.py` / `pipeline.py --brand` places its logo with the template |
 | several clips ("intro + talk + outro") | `analyze.py A.mp4 B.mov C.mp4` (or `pipeline.py` with several inputs): ffmpeg-skill join.py normalises and joins them, then everything is measured on the joined file |
 | "preview" / "show me a frame" | `still.py` |
 | a new kind of graphic | add a composition to `src/` of the project that reads `Props` from `src/timeline.ts`; render with `--comp YourId` (render.py then reports measured numbers without a built-in expectation) |
