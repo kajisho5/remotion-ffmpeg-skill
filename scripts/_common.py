@@ -450,7 +450,10 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
     has_media = t["source"].get("has_video", True) or t["source"].get("has_audio", False)
     t["source"]["src"] = stage_source(project, src) if src and has_media and not overlay else None
     props = {"timeline": t, "options": options, "frame": frame, "font": font, "overlay": overlay}
-    path = project / ".rfs" / f"props-{comp}.json"
+    # Named by content: two renders running at once (different sources, shapes or options) never
+    # overwrite each other's props, and identical props share one file harmlessly.
+    digest = hashlib.sha1(json.dumps(props, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:10]
+    path = project / ".rfs" / f"props-{comp}-{digest}.json"
     if not STATE.dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")

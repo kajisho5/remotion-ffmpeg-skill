@@ -2,7 +2,7 @@
 
 `analyze.py` writes one `timeline.json` per source. The Remotion compositions receive it as
 props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay": ... }`, written by `render.py` / `still.py` to
-`<project>/.rfs/props-<comp>.json`). The TypeScript type is `Timeline` in
+`<project>/.rfs/props-<comp>-<hash>.json`, one file per distinct set of props so parallel renders never collide). The TypeScript type is `Timeline` in
 `templates/remotion-project/src/timeline.ts`.
 
 ## Timeline (schema `remotion-ffmpeg-skill/timeline@1`)
