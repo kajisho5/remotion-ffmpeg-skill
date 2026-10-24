@@ -27,12 +27,16 @@ def _version(cmd):
         return None
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     p.add_argument("--project", help="Remotion project folder to inspect")
     add_common(p)
-    a = p.parse_args()
+    return p
+
+
+def main() -> None:
+    a = build_parser().parse_args()
     apply_common(a)
 
     rows = []

@@ -13,6 +13,7 @@
  *   npx remotion-ffmpeg-skill --project       # ./.claude/skills/remotion-ffmpeg-skill
  *   npx remotion-ffmpeg-skill --uninstall     # remove from the selected targets
  *   npx remotion-ffmpeg-skill doctor          # what this machine can do
+ *   npx remotion-ffmpeg-skill contract --json # machine-readable contract (tools, schemas, verification)
  *
  * This skill needs ffmpeg-skill next to it: `npx ffmpeg-skill` with the same target flags.
  */
@@ -25,7 +26,7 @@ const { spawnSync } = require('child_process');
 
 const SKILL_NAME = 'remotion-ffmpeg-skill';
 const ROOT = path.resolve(__dirname, '..');
-const PAYLOAD = ['SKILL.md', 'scripts', 'templates', 'references', 'package.json', 'LICENSE'];
+const PAYLOAD = ['SKILL.md', 'scripts', 'templates', 'references', 'mcp', 'package.json', 'LICENSE'];
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -48,13 +49,14 @@ function python() {
   return null;
 }
 
-if (args[0] === 'doctor') {
+if (args[0] === 'doctor' || args[0] === 'contract') {
   const py = python();
   if (!py) {
     console.error('Python 3.10+ not found on PATH.');
     process.exit(3);
   }
-  const r = spawnSync(py, [path.join(ROOT, 'scripts', 'doctor.py'), ...args.slice(1)], { stdio: 'inherit' });
+  const script = args[0] === 'doctor' ? 'doctor.py' : '_contract.py';
+  const r = spawnSync(py, [path.join(ROOT, 'scripts', script), ...args.slice(1)], { stdio: 'inherit' });
   process.exit(r.status === null ? 1 : r.status);
 }
 

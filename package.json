@@ -9,6 +9,6 @@
   "homepage": "https://github.com/kajisho5/remotion-ffmpeg-skill#readme",
   "bugs": {"url": "https://github.com/kajisho5/remotion-ffmpeg-skill/issues"},
   "bin": {"remotion-ffmpeg-skill": "bin/remotion-ffmpeg-skill.js"},
-  "files": ["bin", "SKILL.md", "scripts", "templates", "references", "LICENSE", "README.md"],
+  "files": ["bin", "SKILL.md", "scripts", "templates", "references", "mcp", "LICENSE", "README.md"],
   "engines": {"node": ">=18"}
 }
