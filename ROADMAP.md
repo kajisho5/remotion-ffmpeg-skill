@@ -17,7 +17,7 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ CI on Linux, macOS and Windows with real renders
 
 ## Next
-- 🔜 Re-run the Reels task after the "this skill or ffmpeg-skill alone?" note; more tasks (options typos, long footage)
+- 🔜 More eval tasks (options typos, long footage, a Reel that must keep the whole frame)
 - 🔜 Render only the captioned ranges for long footage — needs an ffmpeg-skill overlay that can start a layer at a time offset (upstream change)
 
 ## Ideas
