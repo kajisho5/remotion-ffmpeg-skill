@@ -21,7 +21,8 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `silences` | `[[start, end]]` | silence.py `--list` | measured silent gaps |
 | `speech` | `[[start, end]]` | silence.py `--list` | ranges kept between silences (with margin) |
 | `peaks` | `[{time, rms}]` | scenes.py | audio energy peaks |
-| `beats` | object \| null | scenes.py `--beats` | beat grid as ffmpeg-skill reports it (tempo, times, confidence) |
+| `beats` | object \| null | scenes.py `--beats` | `{times, tempo_bpm, confidence, usable}`; compositions use the times only when `usable` |
+| `highlights` | `[{start, end}]` | scenes.py `--highlights` | ranked by audio energy, stored in source order (analyze.py `--highlights N [--target S]`) |
 | `captions` | `[{start, end, text}]` | your SRT / VTT / JSON | text exactly as written |
 | `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
 
@@ -35,7 +36,10 @@ composition exactly.
 |---|---|---|
 | `Captioned` | source duration | source + caption cards that spring in on each cue and fade out |
 | `Jumpcut` | sum of `speech` ranges | speech ranges back to back, punch-in zoom on every other cut, captions re-timed (parts inside removed silences dropped) |
-| `PeakPulse` | source duration | source + edge glow and slight zoom on each audio peak (scaled by its rms), flash on scene cuts, progress bar with cut ticks |
+| `PeakPulse` | source duration | source + edge glow and slight zoom on each audio peak (scaled by its rms) or on each measured beat (`driver`), flash on scene cuts, progress bar with cut ticks |
+| `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) |
+| `Highlights` | sum of `highlights` (whole file if none) | ranked ranges back to back in source order, flash on cuts, "2 / 5" counter, `title` over the first |
+| `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
 ## Options (`--options look.json`)
 
@@ -51,6 +55,13 @@ Every key is optional.
 | `punchIn` | `1.12` | Jumpcut zoom on every other cut (`1` turns it off) |
 | `pulse` | `0.6` | PeakPulse strength, 0..1 |
 | `progressBar` | `true` | PeakPulse progress bar |
+| `driver` | `"auto"` | PeakPulse: `peaks`, `beats`, or `auto` (beats when a usable grid was measured) |
+| `lowerThirds` | `[]` | Titled: `[{"text", "sub"?, "start", "end"}]`, seconds on the source timeline |
+| `sceneTitles` | `[]` | Titled: one title per measured scene, in order |
+| `title` | `null` | Highlights: title over the first highlight |
+| `beatsPerCut` | `4` | BeatMontage: measured beats per shot |
+
+Unknown keys and wrong types are refused by render.py / still.py before anything renders.
 
 Example:
 

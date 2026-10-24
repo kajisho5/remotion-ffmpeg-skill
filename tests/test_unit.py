@@ -60,6 +60,13 @@ class Frames(unittest.TestCase):
         self.assertEqual(_common.expected_frames("Jumpcut", t), 95 + (240 - 146))
         self.assertIsNone(_common.expected_frames("MyOwn", t))
 
+    def test_new_compositions(self):
+        t = timeline(highlights=[{"start": 1.0, "end": 2.5}, {"start": 5.0, "end": 6.0}])
+        self.assertEqual(_common.expected_frames("Titled", t), 240)
+        self.assertEqual(_common.expected_frames("BeatMontage", t), 240)
+        self.assertEqual(_common.expected_frames("Highlights", t), 45 + 30)
+        self.assertEqual(_common.expected_frames("Highlights", timeline()), 240)  # none ranked: whole file
+
     def test_jumpcut_without_speech_is_whole_file(self):
         self.assertEqual(_common.expected_frames("Jumpcut", timeline(speech=[])), 240)
 
@@ -156,6 +163,26 @@ class OutputFrame(unittest.TestCase):
                  "audio": {"codec": "aac"}}
         ok, rows = render.verify(probe, timeline(), "Captioned", None, False, frame)
         self.assertTrue(ok, rows)
+
+
+class Options(unittest.TestCase):
+    def test_valid(self):
+        ok = {"accent": "#fff", "captionMargin": None, "lowerThirds": [{"text": "A", "sub": "B", "start": 1, "end": 2}],
+              "sceneTitles": ["x"], "driver": "beats", "beatsPerCut": 2, "title": None, "progressBar": False}
+        self.assertEqual(_common.validate_options(ok), [])
+
+    def test_typos_and_bad_values_are_refused(self):
+        p = _common.validate_options({"acent": "#fff", "driver": "loud", "beatsPerCut": 0, "pulse": True,
+                                      "lowerThirds": [{"text": "A", "start": 3, "end": 2}]})
+        joined = " | ".join(p)
+        for word in ("acent", "driver", "beatsPerCut", "pulse", "lowerThirds[0]"):
+            self.assertIn(word, joined)
+
+    def test_matches_typescript_options(self):
+        ts = (ROOT / "templates" / "remotion-project" / "src" / "timeline.ts").read_text(encoding="utf-8")
+        block = ts.split("export const DEFAULT_OPTIONS: Options = {")[1].split("};")[0]
+        keys = {line.split(":")[0].strip() for line in block.splitlines() if ":" in line}
+        self.assertEqual(keys, set(_common._OPTION_TYPES))
 
 
 class Fonts(unittest.TestCase):

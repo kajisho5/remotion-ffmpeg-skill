@@ -127,6 +127,30 @@ class Analyze(unittest.TestCase):
         self.assertIsNone(_common.platform_aspect("podcast"))
 
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_beats_highlights_titles(self):
+        src = self.tmp / "music.mp4"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=4",
+            "-f", "lavfi", "-i", "smptebars=size=640x360:rate=30:duration=4",
+            "-f", "lavfi", "-i", "aevalsrc='sin(2*PI*80*t)*exp(-mod(t\\,0.5)*12)*(0.4+0.6*gt(t\\,4))':s=44100:d=8",
+            "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p[v]",
+            "-map", "[v]", "-map", "2:a", "-c:v", "libx264", "-c:a", "aac", "-t", "8", str(src)], check=True)
+        tl = self.tmp / "music.timeline.json"
+        code, res = script("analyze", src, "-o", tl, "--beats", "--highlights", "1")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["summary"]["beats"])
+        opts = self.tmp / "opts.json"
+        opts.write_text(json.dumps({"sceneTitles": ["One", "Two"], "title": "Sample",
+                                    "lowerThirds": [{"text": "Name", "sub": "Role", "start": 1, "end": 3}]}))
+        for comp in ("Titled", "Highlights", "BeatMontage"):
+            with self.subTest(comp=comp):
+                code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", tl,
+                                   "--options", opts, "-o", self.tmp / f"music_{comp}.mp4", "--fast")
+                self.assertEqual(code, 0, res)
+                self.assertTrue(res["verified"])
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_portrait_and_overlay(self):
         code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
                            "-o", self.tmp / "portrait.mp4", "--aspect", "9:16", "--fast")

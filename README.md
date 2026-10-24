@@ -58,13 +58,24 @@ python3 $S/pipeline.py talk.mp4 --project ./motion --comp Jumpcut --captions tal
 
 Every script takes `--json`, `--dry-run`, `--overwrite`, `--timeout`, like ffmpeg-skill.
 
+### MCP
+
+```bash
+claude mcp add remotion-ffmpeg-skill -- python3 ~/.claude/skills/remotion-ffmpeg-skill/mcp/server.py
+```
+
+Tool names and input schemas come from the machine-readable contract (`npx remotion-ffmpeg-skill contract --json`), generated from the scripts' own argument parsers.
+
 ### Compositions
 
 | Id | Length | What it draws |
 |---|---|---|
 | `Captioned` | source duration | caption cards that spring in on each cue (text exactly as written) |
 | `Jumpcut` | sum of measured speech ranges | silences removed, punch-in on every other cut, captions re-timed |
-| `PeakPulse` | source duration | edge glow + zoom on measured audio peaks, flash on scene cuts, progress bar |
+| `PeakPulse` | source duration | edge glow + zoom on measured audio peaks or beats, flash on scene cuts, progress bar |
+| `Titled` | source duration | your lower thirds + a title card at each measured scene change |
+| `Highlights` | sum of ranked highlights | ffmpeg-skill's audio-energy highlights back to back, counter, title |
+| `BeatMontage` | source duration | audio unbroken, picture cuts on the measured beat grid |
 
 **Any shape:** `--aspect 9:16 | 1:1 | 4:5 | 16:9` with `--fit blur | contain | cover`; `pipeline.py --platform reels` picks 9:16 from ffmpeg-skill's own template so nothing gets cropped on delivery.
 
@@ -99,4 +110,4 @@ Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30
 
 ## Status
 
-0.2.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Planned: MCP server and machine-readable contract (as in ffmpeg-skill), agent evals, beat-grid driven composition, lower-thirds and titles from scene cuts, multi-clip sources.
+0.2.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Planned: agent evals, multi-clip sources, rendering only the captioned ranges for long footage.

@@ -23,6 +23,10 @@ Shared flags (every script): `--json` (one JSON object on stdout; prefer it), `-
 5. **Deliver.** `deliver.py OUT.mp4 --platform youtube|reels|tiktok|shorts|x|...` runs ffmpeg-skill's delivery template and its `check.py` table. Format rows are safe to fix; judgement rows (duration, aspect) change content — ask. Mention WARNs, don't chase them. No destination named: skip this step and say so.
 6. **Look.** Not finished until the reply names the contact sheet render.py wrote (`Look: PATH`) and says what it shows. Mechanical (check and report): text is where it was asked, cues appear at their times, nothing is cut off by the frame. Judgement (say what you see, the user decides): text over a face, a jump that lands badly. No image view: `Look: PATH (pixels not inspected)` — never claim you looked.
 
+Options files are checked before rendering: an unknown key or a wrong type is refused (`kind: input`) instead of silently doing nothing.
+
+MCP: `mcp/server.py` exposes the same tools (schemas from `scripts/_contract.py`, `contract --json` prints them).
+
 Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--captions F] [--platform P]` runs 2→4→5 with the same checks and stops at the first failed step.
 
 ## Request → script / composition
@@ -31,7 +35,10 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 |---|---|
 | "animated captions / subtitles on this video" | `analyze.py --captions` → `render.py --comp Captioned` |
 | "cut the silences / jump cut / tighten this talk" (with motion) | `analyze.py` → `render.py --comp Jumpcut` (captions re-timed if given) |
-| "graphics that react to the audio / hit on the beat / on cuts" | `analyze.py [--beats]` → `render.py --comp PeakPulse` |
+| "graphics that react to the audio / hit on the beat / on cuts" | `analyze.py [--beats]` → `render.py --comp PeakPulse` (pulses on beats when the grid was measured) |
+| "lower thirds / name titles / chapter titles" | `render.py --comp Titled --options` with `lowerThirds` / `sceneTitles` — the text comes from the user; ask for it, never invent names |
+| "highlight reel / best moments" | `analyze.py --highlights N [--target S]` → `render.py --comp Highlights` (audio-energy ranking: candidates, say so) |
+| "cut to the beat / music montage" | `analyze.py --beats [--highlights N]` → `render.py --comp BeatMontage` (audio unbroken, picture cuts every `beatsPerCut` measured beats; scene cuts if no confident grid) |
 | "for YouTube / Reels / TikTok ..." | `pipeline.py --platform` (renders in the template's aspect, then delivers and checks), or `render.py --aspect` + `deliver.py --platform` |
 | "vertical / 9:16 / square" | `render.py --aspect 9:16` (or `1:1`, `4:5`) |
 | "Japanese captions" / a specific font | nothing extra for CJK (auto font); `--font-file` for a chosen font |
@@ -45,7 +52,7 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 ## What this skill decides and what it does not
 
 - **Decides (mechanical):** composition length, fps and size (from the probe); where cuts fall (from measured silences); when cues show (from the caption file); when pulses hit (from measured peaks); whether a render matches its timeline.
-- **Does not decide:** which words a caption says — cue text is drawn exactly as written, never shortened or paraphrased, even to "make it fit" (offer a smaller `captionSize` instead); what counts as a highlight; whether a look is good. Those belong to the user or the calling agent.
+- **Does not decide:** names, titles and chapter names (lower thirds and scene titles are the user's text — ask), which words a caption says — cue text is drawn exactly as written, never shortened or paraphrased, even to "make it fit" (offer a smaller `captionSize` instead); what counts as a highlight; whether a look is good. Those belong to the user or the calling agent.
 - **Never invents data.** No captions without a timed caption file from the user or a local speech-to-text engine; no beat grid that `--beats` did not measure.
 
 ## Rules that keep jobs from failing

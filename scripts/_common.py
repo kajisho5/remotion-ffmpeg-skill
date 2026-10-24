@@ -221,7 +221,7 @@ def validate_timeline(t: Any) -> List[str]:
             v = src.get(k)
             if not isinstance(v, (int, float)) or v <= 0:
                 p.append(f"source.{k} must be a positive number")
-    for k in ("scenes", "silences", "speech", "peaks", "captions"):
+    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
     for i, c in enumerate(t.get("captions", []) or []):
@@ -250,10 +250,13 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
-    if comp == "Jumpcut":
-        ranges = t.get("speech") or [[0.0, float(t["source"]["duration"])]]
+    if comp in ("Jumpcut", "Highlights"):
+        if comp == "Jumpcut":
+            ranges = t.get("speech") or [[0.0, float(t["source"]["duration"])]]
+        else:
+            ranges = [[h["start"], h["end"]] for h in (t.get("highlights") or [])] or [[0.0, float(t["source"]["duration"])]]
         total = sum(max(1, sec_to_frames(e, fps) - sec_to_frames(s, fps)) for s, e in ranges)
         return max(1, total)
     return None
@@ -261,7 +264,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 
 # ---------------------------------------------------------------- Remotion project
 
-BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse")
+BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -489,7 +492,43 @@ def load_options(path: Optional[str]) -> Dict[str, Any]:
         die(f"{p} is not valid JSON: {e}", "input")
     if not isinstance(data, dict):
         die(f"{p} must hold a JSON object", "input")
+    problems = validate_options(data)
+    if problems:
+        die(f"{p}: " + "; ".join(problems) + " (see references/timeline.md, Options)", "input")
     return data
+
+
+# Mirrors Options in src/timeline.ts. A typo'd key would silently do nothing in the browser, so it is refused here.
+_OPTION_TYPES: Dict[str, Any] = {
+    "accent": str, "textColor": str, "fontFamily": str, "captionSize": (int, float),
+    "captionMargin": (int, float, type(None)), "punchIn": (int, float), "pulse": (int, float),
+    "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
+    "title": (str, type(None)), "beatsPerCut": int,
+}
+
+
+def validate_options(o: Dict[str, Any]) -> List[str]:
+    p: List[str] = []
+    for k, v in o.items():
+        if k not in _OPTION_TYPES:
+            p.append(f"unknown option {k!r} (known: {', '.join(sorted(_OPTION_TYPES))})")
+        elif isinstance(v, bool) and _OPTION_TYPES[k] is not bool and bool not in (
+                _OPTION_TYPES[k] if isinstance(_OPTION_TYPES[k], tuple) else (_OPTION_TYPES[k],)):
+            p.append(f"{k} must be {_OPTION_TYPES[k]}, got a boolean")
+        elif not isinstance(v, _OPTION_TYPES[k]):
+            p.append(f"{k} has the wrong type ({type(v).__name__})")
+    if "driver" in o and o["driver"] not in ("auto", "peaks", "beats"):
+        p.append("driver must be auto, peaks or beats")
+    if isinstance(o.get("beatsPerCut"), int) and o["beatsPerCut"] < 1:
+        p.append("beatsPerCut must be at least 1")
+    for i, lt in enumerate(o.get("lowerThirds") or []):
+        if not (isinstance(lt, dict) and isinstance(lt.get("text"), str) and lt.get("text")
+                and isinstance(lt.get("start"), (int, float)) and isinstance(lt.get("end"), (int, float))
+                and lt["end"] > lt["start"] and isinstance(lt.get("sub", ""), str)):
+            p.append(f"lowerThirds[{i}] needs text, start < end (seconds) and an optional sub")
+    if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
+        p.append("sceneTitles must be a list of strings")
+    return p
 
 
 def now() -> float:

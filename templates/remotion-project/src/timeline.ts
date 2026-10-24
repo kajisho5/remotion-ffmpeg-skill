@@ -18,6 +18,10 @@ export type Source = {
 };
 
 export type Caption = { start: number; end: number; text: string };
+export type Beats = { times: number[]; tempo_bpm: number | null; confidence: number | null; usable: boolean };
+export type Highlight = { start: number; end: number };
+/** A lower third: text from the user (options), timing in source seconds. */
+export type LowerThird = { text: string; sub?: string; start: number; end: number };
 export type Peak = { time: number; rms: number };
 export type Scene = { start: number; end: number };
 
@@ -28,7 +32,8 @@ export type Timeline = {
   silences: Range[];
   speech: Range[];
   peaks: Peak[];
-  beats?: unknown;
+  beats?: Beats | null;
+  highlights?: Highlight[];
   captions: Caption[];
   warnings?: string[];
 };
@@ -48,6 +53,16 @@ export type Options = {
   pulse: number;
   /** PeakPulse: show the progress bar along the bottom edge. */
   progressBar: boolean;
+  /** PeakPulse: what drives the pulse -- measured audio peaks, the measured beat grid, or beats when usable. */
+  driver: "auto" | "peaks" | "beats";
+  /** Titled: lower thirds (text from the user, never invented). */
+  lowerThirds: LowerThird[];
+  /** Titled: one title per measured scene, in order; a scene without an entry gets none. */
+  sceneTitles: string[];
+  /** Highlights: title shown over the first highlight (optional). */
+  title: string | null;
+  /** BeatMontage: cut the picture every N measured beats. */
+  beatsPerCut: number;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -59,6 +74,11 @@ export const DEFAULT_OPTIONS: Options = {
   punchIn: 1.12,
   pulse: 0.6,
   progressBar: true,
+  driver: "auto",
+  lowerThirds: [],
+  sceneTitles: [],
+  title: null,
+  beatsPerCut: 4,
 };
 
 /**
@@ -142,6 +162,22 @@ export const retimeCaptions = (t: Timeline): TimedCue[] => {
   }
   return out;
 };
+
+/** Highlight ranges, or the whole source when analyze.py was not asked for any. */
+export const highlightRanges = (t: Timeline): Range[] =>
+  t.highlights && t.highlights.length > 0 ? t.highlights.map((h) => [h.start, h.end] as Range) : [[0, t.source.duration]];
+
+export const highlightFrames = (t: Timeline): number => {
+  const fps = t.source.fps;
+  const total = highlightRanges(t).reduce(
+    (sum, [s, e]) => sum + Math.max(1, secToFrames(e, fps) - secToFrames(s, fps)),
+    0,
+  );
+  return Math.max(1, total);
+};
+
+/** Usable measured beat times (empty when the grid was not measured or not confident). */
+export const beatTimes = (t: Timeline): number[] => (t.beats && t.beats.usable ? t.beats.times : []);
 
 /** Fictional sample for Remotion Studio previews; real renders always pass a measured timeline. */
 export const SAMPLE_TIMELINE: Timeline = {

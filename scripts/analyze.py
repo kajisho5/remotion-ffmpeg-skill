@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", help="timeline file (default: <name>.timeline.json)")
     p.add_argument("--captions", help="SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written)")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
+    p.add_argument("--highlights", type=int, metavar="N",
+                   help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
+    p.add_argument("--target", type=float, metavar="SECONDS", help="with --highlights: total length the picks add up to")
     p.add_argument("--no-scenes", action="store_true", help="skip scene-cut detection")
     p.add_argument("--no-silence", action="store_true", help="skip silence detection (speech = whole file)")
     p.add_argument("--threshold", type=float, help="silence level in dBFS for silence.py (default -35)")
@@ -55,6 +58,10 @@ def scene_args(a: argparse.Namespace) -> List[str]:
         out += ["--threshold", str(a.scene_threshold)]
     if a.beats:
         out.append("--beats")
+    if getattr(a, "highlights", None):
+        out += ["--highlights", str(a.highlights)]
+        if a.target:
+            out += ["--target", str(a.target)]
     return out
 
 
@@ -114,6 +121,9 @@ def main() -> None:
     scenes: List[Dict[str, float]] = [{"start": 0.0, "end": round(duration, 3)}]
     peaks: List[Dict[str, float]] = []
     beats: Any = None
+    highlights: List[Dict[str, float]] = []
+    if a.highlights and (a.no_scenes or not video):
+        die("--highlights needs scene detection on a video source", "input")
     if video and not a.no_scenes:
         sc = ffskill("scenes", [str(src), *scene_args(a)])
         commands.append(sc["_command"])
@@ -122,7 +132,14 @@ def main() -> None:
         peaks = [{"time": round(float(p["time"]), 3), "rms": float(p.get("rms", 0))}
                  for p in sc.get("audio_peaks", [])]
         if a.beats:
-            beats = sc.get("beats")
+            grid = sc.get("beat_grid") or {}
+            beats = {"times": [round(float(b), 3) for b in (sc.get("beats") or [])],
+                     "tempo_bpm": grid.get("tempo_bpm"), "confidence": grid.get("confidence"),
+                     "usable": bool(grid.get("usable")) and bool(sc.get("beats"))}
+        # Chronological order: the composition plays them as they happen in the source.
+        highlights = sorted(({"start": round(float(h["start"]), 3), "end": round(float(h["end"]), 3)}
+                             for h in (sc.get("highlights") or []) if float(h["end"]) > float(h["start"])),
+                            key=lambda h: h["start"])
 
     silences: List[List[float]] = []
     speech: List[List[float]] = [[0.0, round(duration, 3)]]
@@ -153,6 +170,7 @@ def main() -> None:
         "speech": speech,
         "peaks": peaks,
         "beats": beats,
+        "highlights": highlights,
         "captions": captions,
         "warnings": warnings_for(probe),
     }
@@ -171,7 +189,8 @@ def main() -> None:
                       "size": f"{timeline['source']['width']}x{timeline['source']['height']}",
                       "scenes": len(scenes), "silences": len(silences),
                       "speech_seconds": round(speech_total, 3), "peaks": len(peaks),
-                      "captions": len(captions), "beats": bool(beats)},
+                      "captions": len(captions), "beats": bool(beats and beats.get("usable")),
+                      "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights)},
           "warnings": timeline["warnings"]},
          f"wrote {out}: {timeline['source']['duration']}s, {len(scenes)} scenes, {len(silences)} silences "
          f"(speech {speech_total:.2f}s), {len(peaks)} peaks, {len(captions)} captions")

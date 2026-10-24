@@ -146,8 +146,9 @@ def main() -> None:
     refuse_existing(output)
 
     if a.overlay:
-        if a.comp == "Jumpcut":
-            die("--overlay cannot do Jumpcut: its cuts and punch-in zooms move the picture itself", "input")
+        if a.comp in ("Jumpcut", "Highlights", "BeatMontage"):
+            die(f"--overlay cannot do {a.comp}: its cuts move the picture itself (overlay works for "
+                "Captioned, PeakPulse, Titled)", "input")
         if a.aspect not in (None, "source") or a.width is not None or a.fit not in (None, "contain"):
             die("--overlay draws on the source's own frame: drop --aspect / --width / --fit", "input")
         if a.fast or a.codec != "h264" or frames:

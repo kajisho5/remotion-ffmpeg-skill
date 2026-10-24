@@ -1,12 +1,13 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
-import { Props, outputFrame, resolveOptions, secToFrames } from "../timeline";
+import { Props, beatTimes, outputFrame, resolveOptions, secToFrames } from "../timeline";
 
 /**
  * PeakPulse: the source, full length, with motion driven by measurements instead of guesses --
- * a frame-edge glow that hits on each audio peak ffmpeg-skill found (scaled by its loudness),
- * a tick at every scene cut, and a progress bar.
+ * a frame-edge glow that hits on each audio peak ffmpeg-skill found (scaled by its loudness), or on
+ * every measured beat when the beat grid was measured (options.driver), a flash at every scene cut,
+ * and a progress bar.
  */
 export const PeakPulse: React.FC<Props> = (props) => {
   const { timeline, options, overlay } = props;
@@ -14,15 +15,21 @@ export const PeakPulse: React.FC<Props> = (props) => {
   const frame = useCurrentFrame();
   const { fps, width, height, durationInFrames } = useVideoConfig();
 
+  // What drives the pulse: measured beats (equal strength) or measured peaks (scaled by loudness).
+  const beats = beatTimes(timeline);
+  const useBeats = o.driver === "beats" || (o.driver === "auto" && beats.length > 0);
   const maxRms = Math.max(1e-6, ...timeline.peaks.map((p) => p.rms));
-  // Strongest decaying hit among peaks at or before this frame.
+  const events = useBeats
+    ? beats.map((time) => ({ time, strength: 1 }))
+    : timeline.peaks.map((p) => ({ time: p.time, strength: p.rms / maxRms }));
+  // Strongest decaying hit among events at or before this frame.
   let hit = 0;
-  for (const p of timeline.peaks) {
-    const pf = secToFrames(p.time, fps);
+  for (const ev of events) {
+    const pf = secToFrames(ev.time, fps);
     if (pf > frame) continue;
     const age = frame - pf;
-    const decay = Math.exp(-age / (fps * 0.18));
-    hit = Math.max(hit, decay * (p.rms / maxRms));
+    const decay = Math.exp(-age / (fps * (useBeats ? 0.12 : 0.18)));
+    hit = Math.max(hit, decay * ev.strength);
   }
   const glow = Math.round(Math.min(width, height) * 0.06 * o.pulse * hit);
 
