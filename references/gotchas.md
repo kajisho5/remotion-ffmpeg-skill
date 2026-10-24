@@ -16,6 +16,7 @@ Read the one you need; SKILL.md has the one-line versions.
 ## Picture
 - **HDR / BT.2020 looks washed out.** Chrome composites in SDR. analyze.py warns; convert with ffmpeg-skill `color.py --to-sdr` first.
 - **Delivery templates crop.** ffmpeg-skill's Reels / TikTok / Shorts templates fit to 9:16 by cropping, so a 16:9 render loses the edges of every caption. Render in the delivery shape (`--aspect 9:16`, or `pipeline.py --platform`, which reads the template's aspect).
+- **Remotion's default concurrency is half the CPU cores.** render.py passes `--concurrency 100%`: 30 s of 1080p30 on 2 cores went from 170 s to 80 s. A number above the core count is an error.
 - **`--overlay` is not faster.** Transparent PNG frames plus ProRes 4444 cost about what decoding the source saves (170 s vs 174 s for 30 s of 1080p30 on 2 cores). It exists for handing a graphics layer to an editing app.
 
 ## Text

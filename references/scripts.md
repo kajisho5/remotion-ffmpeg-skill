@@ -24,6 +24,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--join-duration` | number | `0.5` | transition length in seconds (default 0.5) |
 | `--output` | string |  | timeline file (default: <name>.timeline.json) |
 | `--captions` | string |  | SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written) |
+| `--words` | string |  | word timings from a speech engine (whisper JSON with word timestamps) for the Karaoke composition; without --captions the cues are grouped from these words |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
@@ -62,7 +63,7 @@ Render single frames as PNG to check the look before a full render.
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or yours) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options |
 | `--at` | number, repeatable |  | time in seconds (repeatable) |
@@ -87,7 +88,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, or one you added) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or one you added) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options (see references/timeline.md) |
 | `--output` | string |  | output file (default: <source>_<comp>.mp4, .mov for prores) |
@@ -95,7 +96,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--crf` | integer |  | h264 quality (Remotion default 18; lower = better) |
 | `--frames` | string |  | render only this frame range, e.g. 0-89 (inclusive) |
 | `--fast` | boolean |  | preview quality: half resolution, quicker encode |
-| `--concurrency` | string |  | Remotion --concurrency (number or percentage) |
+| `--concurrency` | string | `100%` | parallel browser tabs: a number up to the CPU cores, or a percentage (default 100%: all cores -- about twice as fast as Remotion's own default of half the cores) |
 | `--no-look` | boolean |  | skip the contact sheet |
 | `--overlay` | boolean |  | draw the graphics only as a transparent ProRes 4444 layer and composite it over the untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut) |
 | `--keep-graphics` | boolean |  | with --overlay: keep the transparent graphics .mov |
@@ -136,7 +137,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 |---|---|---|---|
 | `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
 | `--options` | string |  | JSON options file passed to the composition |
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |

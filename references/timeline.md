@@ -24,7 +24,8 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `beats` | object \| null | scenes.py `--beats` | `{times, tempo_bpm, confidence, usable}`; compositions use the times only when `usable` |
 | `highlights` | `[{start, end}]` | scenes.py `--highlights` | ranked by audio energy, stored in source order (analyze.py `--highlights N [--target S]`) |
 | `clips` | `[{name, path, start, end}]` | analyze.py with several inputs | where each input sits after ffmpeg-skill join.py joined them (empty for one input) |
-| `captions` | `[{start, end, text}]` | your SRT / VTT / JSON | text exactly as written, timed on the (joined) source |
+| `captions` | `[{start, end, text}]` | your SRT / VTT / JSON, or grouped from `words` | text exactly as written, timed on the (joined) source |
+| `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
 | `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
 
 All times are seconds on the source timeline. Frames are `Math.round(seconds * fps)` (round
@@ -40,6 +41,7 @@ composition exactly.
 | `PeakPulse` | source duration | source + edge glow and slight zoom on each audio peak (scaled by its rms) or on each measured beat (`driver`), flash on scene cuts, progress bar with cut ticks |
 | `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) |
 | `Highlights` | sum of `highlights` (whole file if none) | ranked ranges back to back in source order, flash on cuts, "2 / 5" counter, `title` over the first |
+| `Karaoke` | source duration | caption cues whose words light up at their measured times (current word accent + lift, spoken white, upcoming dimmed); cues without timed words show plain |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
 ## Options (`--options look.json`)
@@ -84,6 +86,7 @@ Example:
 
 - **SRT** and **WebVTT**: timing lines `00:00:01,000 --> 00:00:03,500` (comma or dot), multi-line cue text kept; simple formatting tags (`<i>`, `<b>`, `<c>`, `<v ...>`) are stripped.
 - **JSON**: `[{"start": 1.0, "end": 3.5, "text": "..."}]` or `{"cues": [...]}`.
+- **Word timings** (`--words`): whisper / faster-whisper JSON made with word timestamps (`segments[].words[]` with `word`, `start`, `end`), `{"words": [...]}` or a plain list. With no `--captions`, cues are grouped mechanically: a new cue after a pause over 0.7 s, past 32 characters or 4 s. Words are never added, dropped or reworded.
 
 ## Adding your own composition
 

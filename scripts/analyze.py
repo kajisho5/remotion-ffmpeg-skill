@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
                      require_ffmpeg_skill, shell_join, version)
-from _captions import CaptionError, read_captions
+from _captions import CaptionError, cues_from_words, read_captions, read_words
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--join-duration", type=float, default=0.5, help="transition length in seconds (default 0.5)")
     p.add_argument("-o", "--output", help="timeline file (default: <name>.timeline.json)")
     p.add_argument("--captions", help="SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written)")
+    p.add_argument("--words", help="word timings from a speech engine (whisper JSON with word timestamps) for the "
+                                    "Karaoke composition; without --captions the cues are grouped from these words")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
     p.add_argument("--highlights", type=int, metavar="N",
                    help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
@@ -111,6 +113,18 @@ def main() -> None:
             captions = read_captions(cpath)
         except (CaptionError, ValueError) as e:
             die(f"cannot read {cpath}: {e}", "input")
+
+    words: List[Dict[str, Any]] = []
+    if a.words:
+        wpath = Path(a.words).expanduser()
+        if not wpath.is_file():
+            die(f"word timings file not found: {wpath}", "input")
+        try:
+            words = read_words(wpath)
+        except (CaptionError, ValueError) as e:
+            die(f"cannot read {wpath}: {e}", "input")
+        if not captions:
+            captions = cues_from_words(words)
 
     join_args = [*map(str, inputs), "-o", str(joined), "--transition", a.join_transition,
                  "--duration", str(a.join_duration)] + (["--overwrite"] if STATE.overwrite else [])
@@ -211,6 +225,7 @@ def main() -> None:
         "highlights": highlights,
         "clips": clips,
         "captions": captions,
+        "words": words,
         "warnings": warnings_for(probe),
     }
     if not video:
@@ -230,7 +245,7 @@ def main() -> None:
                       "speech_seconds": round(speech_total, 3), "peaks": len(peaks),
                       "captions": len(captions), "beats": bool(beats and beats.get("usable")),
                       "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
-                      "clips": len(clips) or 1},
+                      "clips": len(clips) or 1, "words": len(words)},
           "warnings": timeline["warnings"]},
          f"wrote {out}: {timeline['source']['duration']}s, {len(scenes)} scenes, {len(silences)} silences "
          f"(speech {speech_total:.2f}s), {len(peaks)} peaks, {len(captions)} captions")

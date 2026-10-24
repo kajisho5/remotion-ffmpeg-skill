@@ -184,7 +184,7 @@ class Analyze(unittest.TestCase):
                                    "-o", self.tmp / f"{comp}.mp4", "--fast")
                 self.assertEqual(code, 0, res)
                 self.assertTrue(res["verified"])
-                self.assertTrue(res["look"] and Path(res["look"]).is_file())
+                self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 
 if __name__ == "__main__":

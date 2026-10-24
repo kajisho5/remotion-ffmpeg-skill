@@ -37,6 +37,8 @@ export type Timeline = {
   /** Several inputs joined by ffmpeg-skill: where each clip sits on the joined timeline. */
   clips?: { name: string; start: number; end: number }[];
   captions: Caption[];
+  /** Word timings from a speech engine (analyze.py --words), text with the engine's own spacing. */
+  words?: Caption[];
   warnings?: string[];
 };
 

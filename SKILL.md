@@ -36,6 +36,7 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 | "animated captions / subtitles on this video" | `analyze.py --captions` → `render.py --comp Captioned` |
 | "cut the silences / jump cut / tighten this talk" (with motion) | `analyze.py` → `render.py --comp Jumpcut` (captions re-timed if given) |
 | "graphics that react to the audio / hit on the beat / on cuts" | `analyze.py [--beats]` → `render.py --comp PeakPulse` (pulses on beats when the grid was measured) |
+| "karaoke captions / words light up as they're spoken" | `analyze.py --words WORDS.json [--captions F.srt]` → `render.py --comp Karaoke` (word timings from a local speech engine, whisper JSON; without an SRT the cues are grouped from the words) |
 | "lower thirds / name titles / chapter titles" | `render.py --comp Titled --options` with `lowerThirds` / `sceneTitles` — the text comes from the user; ask for it, never invent names |
 | "highlight reel / best moments" | `analyze.py --highlights N [--target S]` → `render.py --comp Highlights` (audio-energy ranking: candidates, say so) |
 | "cut to the beat / music montage" | `analyze.py --beats [--highlights N]` → `render.py --comp BeatMontage` (audio unbroken, picture cuts every `beatsPerCut` measured beats; scene cuts if no confident grid) |
@@ -61,6 +62,6 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 - Remotion licence: free for individuals and for-profit organisations with up to 3 employees; larger companies need a Remotion company licence (https://www.remotion.dev/license). If the user is plainly a larger company, say so once.
 - Keep the user's originals: sources are linked into `public/media/` of the project, never modified; outputs never overwrite an existing file without `--overwrite`.
 - CJK captions: the auto font comes from ffmpeg-skill's font detection; when the report says no font was found, install one (Noto Sans CJK) or pass `--font-file` — tofu in the contact sheet is a failed job. Japanese lines break between phrases, not inside words.
-- Speed (measured on a 2-core Linux machine): about 5–6× the clip length for a 1080p30 render (30 s took 170 s). Preview with `still.py` and `--fast` before a full render of long footage; warn the user before starting a render of a long clip.
+- Speed (measured on a 2-core Linux machine, all cores — render.py's default): about 2.6× the clip length for 1080p30 (30 s took 80 s). Preview with `still.py` and `--fast` before a full render of long footage; tell the user the expected time before starting a long render. `--concurrency` above the core count is refused by Remotion.
 - Remotion packages in a project must all be the same version; the template pins them. Don't mix in a different `remotion` version.
 - A render that fails verification is a failure: report the failed rows from `--json`, don't ship it.

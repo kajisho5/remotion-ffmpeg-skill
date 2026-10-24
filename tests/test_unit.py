@@ -47,6 +47,30 @@ class Captions(unittest.TestCase):
             _captions.parse_json_cues('[{"start": 2, "end": 1, "text": "x"}]')
 
 
+class Words(unittest.TestCase):
+    WHISPER = ('{"segments": [{"words": [{"word": " Hello", "start": 0.0, "end": 0.4}, {"word": " there.", "start": 0.4, '
+               '"end": 0.9}]}, {"words": [{"word": " Next", "start": 2.0, "end": 2.3}, {"word": " part", "start": 2.3, "end": 2.7}]}]}')
+
+    def test_whisper_layout_keeps_engine_spacing(self):
+        words = _captions.parse_words(self.WHISPER)
+        self.assertEqual([w["text"] for w in words], [" Hello", " there.", " Next", " part"])
+
+    def test_plain_list_and_text_key(self):
+        words = _captions.parse_words('[{"text": "これは", "start": 1, "end": 1.4}, {"text": "字幕", "start": 1.4, "end": 2}]')
+        self.assertEqual("".join(w["text"] for w in words), "これは字幕")
+
+    def test_grouping_is_mechanical_and_lossless(self):
+        words = _captions.parse_words(self.WHISPER)
+        cues = _captions.cues_from_words(words)
+        self.assertEqual([c["text"] for c in cues], ["Hello there.", "Next part"])  # split at the 1.1 s pause
+        self.assertEqual("".join(c["text"] for c in cues).replace(" ", ""),
+                         "".join(w["text"] for w in words).replace(" ", ""))
+
+    def test_no_words_is_an_error(self):
+        with self.assertRaises(_captions.CaptionError):
+            _captions.parse_words('{"segments": [{"text": "no word timestamps"}]}')
+
+
 class Frames(unittest.TestCase):
     def test_round_half_up_like_javascript(self):
         self.assertEqual(_common.sec_to_frames(3.15, 30), 95)   # 94.5 -> 95 (Python round() would give 94)
@@ -64,6 +88,7 @@ class Frames(unittest.TestCase):
         t = timeline(highlights=[{"start": 1.0, "end": 2.5}, {"start": 5.0, "end": 6.0}])
         self.assertEqual(_common.expected_frames("Titled", t), 240)
         self.assertEqual(_common.expected_frames("BeatMontage", t), 240)
+        self.assertEqual(_common.expected_frames("Karaoke", t), 240)
         self.assertEqual(_common.expected_frames("Highlights", t), 45 + 30)
         self.assertEqual(_common.expected_frames("Highlights", timeline()), 240)  # none ranked: whole file
 
@@ -91,9 +116,17 @@ class RemotionErrors(unittest.TestCase):
         self.assertEqual(_common.remotion_error(log), "Error  Error: Could not find composition with ID Nope.")
 
 
+class RemotionErrorsWithoutMarker(unittest.TestCase):
+    def test_keeps_the_error_line_not_the_stack(self):
+        log = ("Error: concurrency is set higher than the amount of CPU cores available. Available CPU cores: 2\n"
+               "    at render (/x/render.js:166:40)\n    at cli (/x/index.js:121:39)\n")
+        self.assertIn("concurrency is set higher", _common.remotion_error(log))
+        self.assertNotIn("render.js", _common.remotion_error(log))
+
+
 class RenderCommand(unittest.TestCase):
     def ns(self, **kw):
-        base = dict(codec="h264", crf=None, frames=None, fast=False, concurrency=None)
+        base = dict(codec="h264", crf=None, frames=None, fast=False, concurrency="100%")
         base.update(kw)
         return argparse.Namespace(**base)
 
@@ -101,7 +134,7 @@ class RenderCommand(unittest.TestCase):
         cmd = render.remotion_render_cmd(Path("/p"), "Jumpcut", Path("/o.mp4"), Path("/p/.rfs/x.json"), self.ns(fast=True))
         self.assertIn("--scale=0.5", cmd)
         self.assertIn("--crf=28", cmd)
-        self.assertEqual(cmd[1:5], ["render", "src/index.ts", "Jumpcut", "/o.mp4"])
+        self.assertEqual(cmd[1:5], ["render", "src/index.ts", "Jumpcut", str(Path("/o.mp4"))])
 
     def test_prores(self):
         cmd = render.remotion_render_cmd(Path("/p"), "Captioned", Path("/o.mov"), Path("/x.json"), self.ns(codec="prores", crf=10))

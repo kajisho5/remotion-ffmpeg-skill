@@ -76,6 +76,7 @@ Tool names and input schemas come from the machine-readable contract (`npx remot
 | `Titled` | source duration | your lower thirds + a title card at each measured scene change |
 | `Highlights` | sum of ranked highlights | ffmpeg-skill's audio-energy highlights back to back, counter, title |
 | `BeatMontage` | source duration | audio unbroken, picture cuts on the measured beat grid |
+| `Karaoke` | source duration | words light up at the times a local speech engine measured |
 
 **Any shape:** `--aspect 9:16 | 1:1 | 4:5 | 16:9` with `--fit blur | contain | cover`; `pipeline.py --platform reels` picks 9:16 from ffmpeg-skill's own template so nothing gets cropped on delivery.
 
@@ -106,7 +107,7 @@ This skill is MIT. **Remotion itself has its own licence**: free for individuals
 
 ## Speed
 
-Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30 s 1080p30 render takes about 170 s (≈ 5–6× the clip length). Check with `still.py` and `--fast` before a full render of long footage; more CPU cores help (`--concurrency`).
+Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30 s 1080p30 render takes about 80 s (≈ 2.6× the clip length) with render.py's default of all CPU cores — Remotion's own default (half the cores) took 170 s. More cores scale it further. Check with `still.py` and `--fast` before a full render of long footage.
 
 ## Agent evals
 
@@ -114,4 +115,4 @@ Six plain requests ("captions for YouTube", a Japanese Reels jump cut, "cut to t
 
 ## Status
 
-0.3.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Next: rendering only the captioned ranges for long footage, macOS/Windows CI, word-level karaoke captions ([roadmap](ROADMAP.md)).
+0.3.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Next: rendering only the captioned ranges for long footage, macOS/Windows CI, more eval tasks ([roadmap](ROADMAP.md)).

@@ -13,12 +13,12 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Several inputs joined by ffmpeg-skill before measuring
 - ✅ Machine-readable contract + MCP server
 - ✅ Agent evals (6 tasks, grader, first run 6/6)
+- ✅ Karaoke captions from word timings
+- ✅ CI on Linux, macOS and Windows with real renders
 
 ## Next
 - 🔜 More eval tasks (overlay layer, several inputs, options typos) and repeated runs
-- 🔜 Render only the captioned ranges for long footage (segment renders composited by ffmpeg-skill)
-- 🔜 macOS and Windows runs in CI
-- 🔜 Word-level karaoke captions from timed words (ffmpeg-skill transcription word timings)
+- 🔜 Render only the captioned ranges for long footage — needs an ffmpeg-skill overlay that can start a layer at a time offset (upstream change)
 
 ## Ideas
 - 💡 Brand file (`brand.json`, shared with ffmpeg-skill) for colours, fonts and logo

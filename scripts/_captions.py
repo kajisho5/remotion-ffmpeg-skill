@@ -77,3 +77,65 @@ def read_captions(path: Path) -> List[Dict]:
     else:
         cues = parse_srt_or_vtt(text)
     return sorted(cues, key=lambda c: c["start"])
+
+
+# ---------------------------------------------------------------- word timings (karaoke)
+
+def parse_words(text: str) -> List[Dict]:
+    """Word timings from a speech engine's JSON, as [{start, end, text}] in time order.
+
+    Accepts the whisper / faster-whisper layout ({"segments": [{"words": [{"word", "start", "end"}]}]}),
+    a top-level {"words": [...]} and a plain list. `text` keeps the engine's own spacing (English words
+    carry a leading space, Japanese tokens none), so joining them reproduces the transcript exactly.
+    """
+    data = json.loads(text)
+    raw: List[Dict] = []
+    if isinstance(data, dict) and isinstance(data.get("segments"), list):
+        for seg in data["segments"]:
+            raw += list(seg.get("words") or [])
+    elif isinstance(data, dict) and isinstance(data.get("words"), list):
+        raw = data["words"]
+    elif isinstance(data, list):
+        raw = data
+    else:
+        raise CaptionError("word timings must be whisper JSON (segments[].words[]) or a list of {word, start, end}")
+    words: List[Dict] = []
+    for i, w in enumerate(raw):
+        try:
+            body = str(w.get("word", w.get("text")))
+            start, end = float(w["start"]), float(w["end"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            raise CaptionError(f"word {i} needs word/text, start and end")
+        if body in ("", "None") or end < start:
+            continue
+        words.append({"start": round(start, 3), "end": round(max(end, start + 0.01), 3), "text": body})
+    if not words:
+        raise CaptionError("no timed words found (was the transcript made with word timestamps?)")
+    return sorted(words, key=lambda w: w["start"])
+
+
+def read_words(path: Path) -> List[Dict]:
+    return parse_words(path.read_text(encoding="utf-8-sig"))
+
+
+def cues_from_words(words: List[Dict], max_chars: int = 32, max_gap: float = 0.7, max_len: float = 4.0) -> List[Dict]:
+    """Group timed words into caption cues mechanically: a new cue after a pause longer than max_gap,
+    when the cue would pass max_chars characters, or last longer than max_len seconds. The words and
+    their order are the engine's; nothing is added, dropped or reworded."""
+    cues: List[Dict] = []
+    cur: List[Dict] = []
+    for w in words:
+        if cur:
+            text_len = len("".join(x["text"] for x in cur + [w]).strip())
+            if (w["start"] - cur[-1]["end"] > max_gap or text_len > max_chars
+                    or w["end"] - cur[0]["start"] > max_len):
+                cues.append(_cue(cur))
+                cur = []
+        cur.append(w)
+    if cur:
+        cues.append(_cue(cur))
+    return cues
+
+
+def _cue(ws: List[Dict]) -> Dict:
+    return {"start": ws[0]["start"], "end": ws[-1]["end"], "text": "".join(w["text"] for w in ws).strip()}

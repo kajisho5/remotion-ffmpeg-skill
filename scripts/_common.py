@@ -221,7 +221,7 @@ def validate_timeline(t: Any) -> List[str]:
             v = src.get(k)
             if not isinstance(v, (int, float)) or v <= 0:
                 p.append(f"source.{k} must be a positive number")
-    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights"):
+    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
     for i, c in enumerate(t.get("captions", []) or []):
@@ -250,7 +250,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -264,7 +264,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 
 # ---------------------------------------------------------------- Remotion project
 
-BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage")
+BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -293,7 +293,11 @@ def remotion_error(text: str, limit: int = 15) -> str:
     for i, ln in enumerate(lines):
         if "An error occurred" in ln:
             return "\n".join(ln2.strip() for ln2 in lines[i + 1:i + 1 + limit])
-    return "\n".join(lines[-limit:])
+    # No marker: the Error lines themselves, without the JavaScript stack frames under them.
+    errors = [ln.strip() for ln in lines if "Error" in ln and not ln.lstrip().startswith("at ")]
+    if errors:
+        return "\n".join(errors[-limit:])
+    return "\n".join(ln for ln in lines if not ln.lstrip().startswith("at "))[-4000:] or "\n".join(lines[-limit:])
 
 
 def stage_source(project: Path, source_path: str) -> str:

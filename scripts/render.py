@@ -34,7 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--crf", type=int, help="h264 quality (Remotion default 18; lower = better)")
     p.add_argument("--frames", help="render only this frame range, e.g. 0-89 (inclusive)")
     p.add_argument("--fast", action="store_true", help="preview quality: half resolution, quicker encode")
-    p.add_argument("--concurrency", help="Remotion --concurrency (number or percentage)")
+    p.add_argument("--concurrency", default="100%",
+                   help="parallel browser tabs: a number up to the CPU cores, or a percentage (default 100%%: all "
+                        "cores -- about twice as fast as Remotion's own default of half the cores)")
     p.add_argument("--no-look", action="store_true", help="skip the contact sheet")
     p.add_argument("--overlay", action="store_true",
                    help="draw the graphics only as a transparent ProRes 4444 layer and composite it over the "
@@ -148,7 +150,7 @@ def main() -> None:
     if a.overlay:
         if a.comp in ("Jumpcut", "Highlights", "BeatMontage"):
             die(f"--overlay cannot do {a.comp}: its cuts move the picture itself (overlay works for "
-                "Captioned, PeakPulse, Titled)", "input")
+                "Captioned, PeakPulse, Titled, Karaoke)", "input")
         if a.aspect not in (None, "source") or a.width is not None or a.fit not in (None, "contain"):
             die("--overlay draws on the source's own frame: drop --aspect / --width / --fit", "input")
         if a.fast or a.codec != "h264" or frames:
@@ -190,18 +192,24 @@ def main() -> None:
     probe = ffskill("probe", [str(output)])
     ok, rows = verify(probe, timeline, a.comp, frames, a.fast, frame)
     look: Optional[str] = None
+    look_error: Optional[str] = None
     commands.append(probe["_command"])
     if not a.no_look:
         lk = ffskill("look", [str(output), "--tiles", "3x2"], allow_fail=True)
         if lk.get("status") == "completed":
             look = lk.get("output")
+            if look and not Path(look).is_absolute():
+                look = str((Path.cwd() / look).resolve())
             commands.append(lk.get("_command", ""))
+        else:
+            look_error = f"{lk.get('kind') or 'failed'}: {str(lk.get('error') or '')[-400:]}"
+            info(f"warning: contact sheet failed ({look_error}); view the render itself")
     v = probe.get("video") or {}
     summary = (f"{output.name}: {float(probe.get('duration') or 0):.2f} s, {v.get('width')}x{v.get('height')}, "
                f"{v.get('fps')} fps, {'audio' if probe.get('audio') else 'no audio'}")
     result = {"status": "completed" if ok else "failed", "output": str(output), "verified": ok,
               "verification": rows, "commands": commands, "look": look, "summary": summary,
-              "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full",
+              "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full", "look_error": look_error,
               "graphics": str(graphics) if a.overlay and a.keep_graphics else None,
               "kind": None if ok else "failed"}
     table = "\n".join(f"  {r['check']:<9} {r['status']:<4}  {r['value']} (expected {r['expected']})" for r in rows)
