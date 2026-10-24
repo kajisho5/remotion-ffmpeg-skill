@@ -35,11 +35,10 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 ffmpeg-skill by itself already does silence cuts, burned-in (also pop / karaoke) captions, title and lower-third templates, joins and platform templates, without a browser render. For a request that fits those, ffmpeg-skill alone is a valid and faster answer. Choose this skill when the request needs something ffmpeg-skill does not draw:
 
 - motion tied to measurements: punch-in zooms on jump cuts, pulses on peaks or beats, picture cuts on a beat grid, a highlight counter;
-- a different shape **without losing picture**: ffmpeg-skill's Reels / TikTok / Shorts templates centre-crop a 16:9 source (`fit: crop`), so the sides are cut off; `--aspect 9:16 --fit blur` keeps the whole frame;
 - the graphics as a separate transparent layer for an editor (`--overlay --keep-graphics`);
 - a custom React composition, or the user asks for Remotion.
 
-Whichever you choose, say which one and the trade-off that matters (for example "centre-cropped: the left and right edges are gone").
+Changing the shape alone is not a reason: ffmpeg-skill's Reels / TikTok / Shorts templates centre-crop by default, but ffmpeg-skill can also keep the whole frame on a blurred fill. Whichever you choose, say which one and the trade-off that matters (for example "centre-cropped: the left and right edges are gone").
 
 ## Request → script / composition
 
