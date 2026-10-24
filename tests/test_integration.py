@@ -148,6 +148,13 @@ class Analyze(unittest.TestCase):
         else:
             self.assertIn("--place", sp["reason"])
 
+    def test_deliver_without_chapters(self):
+        out = self.tmp / "plain_youtube.mp4"
+        code, res = script("deliver", self.src, "--platform", "youtube", "-o", out)
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+        self.assertIsNone(res["description"])
+
     def test_chapters_from_a_file_and_from_the_source(self):
         chf = self.tmp / "chapters.txt"
         chf.write_text("0:00 Placeholder opening\n0:04 Placeholder second part\n", encoding="utf-8")

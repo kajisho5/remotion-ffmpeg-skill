@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--platform", choices=PLATFORMS, help="ffmpeg-skill delivery template to run")
     p.add_argument("-o", "--output", help="deliverable path (default: <name>_<platform>.mp4)")
     p.add_argument("--check-only", action="store_true", help="run check.py only, write nothing")
+    p.add_argument("--brand", help="ffmpeg-skill brand.json for the template (its logo, safe margins, loudness)")
     p.add_argument("--chapters", metavar="FILE",
                    help="also write these chapters (`TIME TITLE` per line) into the deliverable with ffmpeg-skill "
                         "metadata.py, plus the YouTube description block next to it (<name>_description.txt)")
@@ -68,11 +69,15 @@ def main() -> None:
         refuse_existing(out)
         templated = out.with_name(out.stem + ".nochapters" + out.suffix) if a.chapters else out
         args = ["--template", a.platform, str(src), "-o", str(templated)]
+        if a.brand:
+            if not Path(a.brand).expanduser().is_file():
+                die(f"brand file not found: {a.brand}", "input")
+            args += ["--brand", str(Path(a.brand).expanduser().resolve())]
         if STATE.overwrite or a.chapters:
             args.append("--overwrite")
         description = out.with_name(out.stem + "_description.txt")
-        meta_args = [str(templated), "--chapters", str(Path(a.chapters).expanduser()), "-o", str(out)] + (
-            ["--overwrite"] if STATE.overwrite else [])
+        meta_args = ([str(templated), "--chapters", str(Path(a.chapters).expanduser()), "-o", str(out)]
+                     + (["--overwrite"] if STATE.overwrite else [])) if a.chapters else []
         if STATE.dry_run:
             commands.append(shell_join(ffskill_cmd("render", args)))
             if a.chapters:
