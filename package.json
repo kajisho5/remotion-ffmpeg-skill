@@ -1,14 +1,46 @@
 {
   "name": "remotion-ffmpeg-skill",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Agent Skill: ffmpeg-skill measures the footage, Remotion draws the motion graphics from those measurements, ffmpeg-skill checks and delivers the result. Timeline-driven captions, silence jump cuts and audio-peak motion with probe-first / verify-last rendering. Local, no API keys.",
-  "keywords": ["remotion", "ffmpeg", "ffmpeg-skill", "video", "motion-graphics", "captions", "agent-skill", "agent-skills", "claude-code", "claude-skill", "cursor", "codex", "ai-agents"],
+  "keywords": [
+    "remotion",
+    "ffmpeg",
+    "ffmpeg-skill",
+    "video",
+    "motion-graphics",
+    "captions",
+    "agent-skill",
+    "agent-skills",
+    "claude-code",
+    "claude-skill",
+    "cursor",
+    "codex",
+    "ai-agents"
+  ],
   "license": "MIT",
   "author": "kajisho5",
-  "repository": {"type": "git", "url": "git+https://github.com/kajisho5/remotion-ffmpeg-skill.git"},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kajisho5/remotion-ffmpeg-skill.git"
+  },
   "homepage": "https://github.com/kajisho5/remotion-ffmpeg-skill#readme",
-  "bugs": {"url": "https://github.com/kajisho5/remotion-ffmpeg-skill/issues"},
-  "bin": {"remotion-ffmpeg-skill": "bin/remotion-ffmpeg-skill.js"},
-  "files": ["bin", "SKILL.md", "scripts", "templates", "references", "mcp", "LICENSE", "README.md"],
-  "engines": {"node": ">=18"}
+  "bugs": {
+    "url": "https://github.com/kajisho5/remotion-ffmpeg-skill/issues"
+  },
+  "bin": {
+    "remotion-ffmpeg-skill": "bin/remotion-ffmpeg-skill.js"
+  },
+  "files": [
+    "bin",
+    "SKILL.md",
+    "scripts",
+    "templates",
+    "references",
+    "mcp",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

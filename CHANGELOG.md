@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- the contract states each tool's --json result and dry-run shapes
+
+
 ## 0.4.0 — 2026-10-24
 
 - **Karaoke captions:** `analyze.py --words` reads word timings from a local speech engine (whisper JSON with word timestamps); the `Karaoke` composition lights each word at its measured time. Without an SRT, cues are grouped from the words mechanically (pause / length rules), never reworded.
