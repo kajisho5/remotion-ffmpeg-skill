@@ -18,7 +18,7 @@ Examples:
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
@@ -43,6 +43,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill "
                         "metadata.py --chapters writes into the container), or `source` for the chapters already "
                         "in the input file; titles are kept as written")
+    p.add_argument("--pip", metavar="CAMERA",
+                   help="a second recording (camera) for the Pip composition: picture-in-picture over the source. "
+                        "The offset between the two is measured from their audio with ffmpeg-skill sync.py")
+    p.add_argument("--pip-offset", type=float, metavar="SECONDS",
+                   help="with --pip: the camera starts this many seconds after the source (negative: before), "
+                        "instead of measuring it -- for a camera without usable audio")
+    p.add_argument("--pip-max-offset", type=float, default=30.0,
+                   help="with --pip: largest offset sync.py searches, in seconds (default 30)")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
     p.add_argument("--highlights", type=int, metavar="N",
                    help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
@@ -222,6 +230,35 @@ def main() -> None:
         except CaptionError as e:
             die(f"{chpath}: {e}", "input")
 
+    pip: Optional[Dict[str, Any]] = None
+    if a.pip_offset is not None and not a.pip:
+        die("--pip-offset needs --pip", "input")
+    if a.pip:
+        cam = Path(a.pip).expanduser()
+        if not cam.is_file():
+            die(f"--pip file not found: {cam}", "input")
+        cp = ffskill("probe", [str(cam)])
+        commands.append(cp["_command"])
+        cv = cp.get("video") or {}
+        if not cv:
+            die(f"--pip {cam} has no video stream", "input")
+        pip = {"path": str(cam.resolve()), "name": cam.name,
+               "duration": round(float(cv.get("duration") or cp.get("duration") or 0), 3),
+               "width": int(cv.get("width") or 0), "height": int(cv.get("height") or 0),
+               "fps": float(cv.get("fps") or 0), "offset": 0.0, "confidence": None, "measured": False}
+        if a.pip_offset is not None:
+            pip["offset"] = round(float(a.pip_offset), 4)
+        elif not (audio and cp.get("audio")):
+            die("--pip: both recordings need audio to measure their offset; give --pip-offset SECONDS instead",
+                "input")
+        else:
+            sy = ffskill("sync", [str(src), str(cam), "--max-offset", str(a.pip_max_offset)])
+            commands.append(sy["_command"])
+            pip.update(offset=round(float(sy.get("offset_seconds") or 0), 4),
+                       confidence=sy.get("confidence"), measured=True)
+        if pip["offset"] >= duration or pip["offset"] + pip["duration"] <= 0:
+            die(f"--pip: with an offset of {pip['offset']:g} s the camera never overlaps the source", "input")
+
     v = video or {}
     timeline: Dict[str, Any] = {
         "schema": TIMELINE_SCHEMA,
@@ -247,8 +284,12 @@ def main() -> None:
         "captions": captions,
         "words": words,
         "chapters": chapters,
+        "pip": pip,
         "warnings": warnings_for(probe) + youtube_chapter_warnings(chapters) if chapters else warnings_for(probe),
     }
+    if pip and pip["measured"] and (pip["confidence"] or 0) < 0.3:
+        timeline["warnings"].append(f"pip: the measured offset ({pip['offset']:g} s) has low confidence "
+                                    f"({pip['confidence']}); check a still, or set it with --pip-offset")
     if not video:
         timeline["warnings"].append("audio-only source: width/height/fps default to 1920x1080 at 30 fps; "
                                     "render with --aspect / --width to choose the frame.")
@@ -264,7 +305,8 @@ def main() -> None:
                       "size": f"{timeline['source']['width']}x{timeline['source']['height']}",
                       "scenes": len(scenes), "silences": len(silences),
                       "speech_seconds": round(speech_total, 3), "peaks": len(peaks),
-                      "captions": len(captions), "chapters": len(chapters), "beats": bool(beats and beats.get("usable")),
+                      "captions": len(captions), "chapters": len(chapters),
+                      "pip_offset": pip["offset"] if pip else None, "beats": bool(beats and beats.get("usable")),
                       "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
                       "clips": len(clips) or 1, "words": len(words)},
           "warnings": timeline["warnings"]},

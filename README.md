@@ -85,6 +85,7 @@ Tool names and input schemas come from the machine-readable contract (`npx remot
 | `Highlights` | sum of ranked highlights | ffmpeg-skill's audio-energy highlights back to back, counter, title |
 | `BeatMontage` | source duration | audio unbroken, picture cuts on the measured beat grid |
 | `Karaoke` | source duration | words light up at the times a local speech engine measured |
+| `Pip` | source duration | a second recording (camera) in a corner, synced by the offset measured between the two audio tracks; captions on top |
 
 **Any shape:** `--aspect 9:16 | 1:1 | 4:5 | 16:9` with `--fit blur | contain | cover`; `pipeline.py --platform reels` picks 9:16 from ffmpeg-skill's own template so nothing gets cropped on delivery.
 

@@ -26,6 +26,7 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `clips` | `[{name, path, start, end}]` | analyze.py with several inputs | where each input sits after ffmpeg-skill join.py joined them (empty for one input) |
 | `captions` | `[{start, end, text}]` | your SRT / VTT / JSON, or grouped from `words` | text exactly as written, timed on the (joined) source |
 | `chapters` | `[{start, end, title}]` | `--chapters FILE` (`TIME TITLE` per line, YouTube's format) or `--chapters source` (the file's own markers) | titles as written; each ends where the next starts. YouTube's rules (first at 0:00, at least three, each ≥ 10 s) become warnings |
+| `pip` | `{path, name, duration, width, height, fps, offset, confidence, measured}` or null | `--pip CAMERA` (offset from ffmpeg-skill sync.py over both audio tracks) or `--pip-offset` | offset = seconds after the source's start at which the camera's first frame belongs (negative: the camera started first) |
 | `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
 | `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
 
@@ -43,6 +44,7 @@ composition exactly.
 | `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) + a chapter card at each chapter start (`chapters`, numbered n / total) |
 | `Highlights` | sum of `highlights` (whole file if none) | ranked ranges back to back in source order, flash on cuts, "2 / 5" counter, `title` over the first |
 | `Karaoke` | source duration | caption cues whose words light up at their measured times (current word accent + lift, spoken white, upcoming dimmed); cues without timed words show plain |
+| `Pip` | source duration | the source with `pip` (a camera) in a corner while the camera has pictures, synced by `pip.offset`; captions on top as in Captioned |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
 ## Options (`--options look.json`)
@@ -64,6 +66,10 @@ Every key is optional.
 | `sceneTitles` | `[]` | Titled: one title per measured scene, in order |
 | `title` | `null` | Highlights: title over the first highlight |
 | `beatsPerCut` | `4` | BeatMontage: measured beats per shot |
+| `pipCorner` | `"bottom-right"` | Pip: `top-left`, `top-right`, `bottom-left`, `bottom-right` |
+| `pipSize` | `0.28` | Pip: camera width as a fraction of the frame width (circle: of the short side), 0.05–0.6 |
+| `pipShape` | `"rounded"` | Pip: `rounded` or `circle` |
+| `pipAudio` | `false` | Pip: also play the camera's own audio |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.

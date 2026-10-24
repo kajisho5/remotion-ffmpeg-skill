@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import ROOT, STATE, add_common, apply_common, die, emit, info, run, shell_join
+from _common import BUILTIN_COMPOSITIONS, ROOT, STATE, add_common, apply_common, die, emit, info, run, shell_join
 
 TEMPLATE = ROOT / "templates" / "remotion-project"
 
@@ -54,7 +54,7 @@ def main() -> None:
             die("npm install failed:\n" + "\n".join((proc.stderr or "").strip().splitlines()[-20:]), "failed")
         installed = True
     emit({"output": str(dst), "commands": commands, "installed": installed, "entry": "src/index.ts",
-          "compositions": ["Captioned", "Jumpcut", "PeakPulse"]},
+          "compositions": list(BUILTIN_COMPOSITIONS)},
          f"created {dst}" + ("" if installed else f"\nnext: cd {dst} && npm install"))
 
 

@@ -285,6 +285,24 @@ class Brand(unittest.TestCase):
         self.assertIn(f'fontFamily: "{_common.DEFAULT_FONT_STACK}",', ts)
 
 
+class PipOptions(unittest.TestCase):
+    def test_valid_and_refused(self):
+        self.assertEqual(_common.validate_options({"pipCorner": "top-left", "pipSize": 0.2, "pipShape": "circle",
+                                                   "pipAudio": True}), [])
+        for bad in ({"pipCorner": "middle"}, {"pipShape": "square"}, {"pipSize": 0.9}, {"pipAudio": "yes"}):
+            with self.subTest(bad=bad):
+                self.assertTrue(_common.validate_options(bad))
+
+    def test_pip_is_full_length(self):
+        t = {"source": {"fps": 30.0, "duration": 10.0}}
+        self.assertEqual(_common.expected_frames("Pip", t), 300)
+
+    def test_timeline_pip_shape_is_checked(self):
+        base = {"schema": _common.TIMELINE_SCHEMA, "source": {"duration": 1, "fps": 30, "width": 2, "height": 2}}
+        self.assertEqual(_common.validate_timeline({**base, "pip": None}), [])
+        self.assertTrue(_common.validate_timeline({**base, "pip": {"offset": "x"}}))
+
+
 class Chapters(unittest.TestCase):
     def test_youtube_format_kept_as_written(self):
         ch = _captions.parse_chapters("0:00 Intro\n1:05 - Setup and tools\n# comment\n\n1:02:03.5 Q&A\n", 4000)

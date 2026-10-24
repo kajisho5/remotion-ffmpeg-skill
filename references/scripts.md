@@ -26,6 +26,9 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--captions` | string |  | SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written) |
 | `--words` | string |  | word timings from a speech engine (whisper JSON with word timestamps) for the Karaoke composition; without --captions the cues are grouped from these words |
 | `--chapters` | string |  | chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill metadata.py --chapters writes into the container), or `source` for the chapters already in the input file; titles are kept as written |
+| `--pip` | string |  | a second recording (camera) for the Pip composition: picture-in-picture over the source. The offset between the two is measured from their audio with ffmpeg-skill sync.py |
+| `--pip-offset` | number |  | with --pip: the camera starts this many seconds after the source (negative: before), instead of measuring it -- for a camera without usable audio |
+| `--pip-max-offset` | number | `30.0` | with --pip: largest offset sync.py searches, in seconds (default 30) |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
@@ -72,7 +75,7 @@ Render single frames as PNG to check the look before a full render.
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, or yours) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options |
 | `--at` | number, repeatable |  | time in seconds (repeatable) |
@@ -102,7 +105,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or one you added) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, or one you added) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options (see references/timeline.md) |
 | `--output` | string |  | output file (default: <source>_<comp>.mp4, .mov for prores) |
@@ -165,7 +168,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 |---|---|---|---|
 | `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
 | `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |

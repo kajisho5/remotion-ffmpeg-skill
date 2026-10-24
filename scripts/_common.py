@@ -222,6 +222,9 @@ def validate_timeline(t: Any) -> List[str]:
             v = src.get(k)
             if not isinstance(v, (int, float)) or v <= 0:
                 p.append(f"source.{k} must be a positive number")
+    if t.get("pip") is not None and not (isinstance(t["pip"], dict) and isinstance(t["pip"].get("offset"), (int, float))
+                                         and t["pip"].get("path")):
+        p.append("pip must be {path, offset, duration, ...} (analyze.py --pip)")
     for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words", "chapters"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
@@ -251,7 +254,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -265,7 +268,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 
 # ---------------------------------------------------------------- Remotion project
 
-BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke")
+BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -454,6 +457,8 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
     src = t["source"].get("path")
     has_media = t["source"].get("has_video", True) or t["source"].get("has_audio", False)
     t["source"]["src"] = stage_source(project, src) if src and has_media and not overlay else None
+    if t.get("pip") and comp == "Pip":
+        t["pip"]["src"] = stage_source(project, t["pip"]["path"])
     props = {"timeline": t, "options": options, "frame": frame, "font": font, "overlay": overlay}
     # Named by content: two renders running at once (different sources, shapes or options) never
     # overwrite each other's props, and identical props share one file harmlessly.
@@ -586,6 +591,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "captionMargin": (int, float, type(None)), "punchIn": (int, float), "pulse": (int, float),
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
     "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
+    "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
 }
 
 
@@ -611,6 +617,13 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if isinstance(o.get("chapterSeconds"), (int, float)) and not isinstance(o["chapterSeconds"], bool) \
             and o["chapterSeconds"] < 0:
         p.append("chapterSeconds cannot be negative")
+    if "pipCorner" in o and o["pipCorner"] not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+        p.append("pipCorner must be top-left, top-right, bottom-left or bottom-right")
+    if "pipShape" in o and o["pipShape"] not in ("rounded", "circle"):
+        p.append("pipShape must be rounded or circle")
+    if isinstance(o.get("pipSize"), (int, float)) and not isinstance(o["pipSize"], bool) \
+            and not 0.05 <= o["pipSize"] <= 0.6:
+        p.append("pipSize must be between 0.05 and 0.6 (a fraction of the frame width)")
     if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
         p.append("sceneTitles must be a list of strings")
     return p

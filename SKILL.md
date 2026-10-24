@@ -56,6 +56,7 @@ Changing the shape alone is not a reason: ffmpeg-skill's Reels / TikTok / Shorts
 | "vertical / 9:16 / square" | `render.py --aspect 9:16` (or `1:1`, `4:5`) |
 | "Japanese captions" / a specific font | nothing extra for CJK (auto font); `--font-file` for a chosen font |
 | "give me the graphics as a separate layer" | `render.py --overlay --keep-graphics` |
+| "put my camera in the corner" / picture-in-picture (screen recording + camera) | `analyze.py screen.mp4 --pip camera.mp4 [--captions F]` (the offset is measured from both audio tracks by ffmpeg-skill sync.py; a camera without usable audio: `--pip-offset SECONDS`) → `render.py --comp Pip` (`pipCorner`, `pipSize`, `pipShape`, `pipAudio`). Low confidence is a warning: check a still before rendering |
 | captions or name titles on long footage (a talk, a lecture) | `render.py --comp Captioned --sparse` (or `Karaoke`, `Titled`): only the stretches where something shows are drawn |
 | "change colour / font / caption size / zoom" | an `--options` JSON (`references/timeline.md`), re-render |
 | "use our brand" / a `brand.json` (ffmpeg-skill's format) | `--brand brand.json` on render / still / pipeline: its colours, caption colour, font and font file set the look (an `--options` file wins key by key); `deliver.py` / `pipeline.py --brand` places its logo with the template |

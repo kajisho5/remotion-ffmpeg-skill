@@ -210,8 +210,8 @@ def main() -> None:
             die("--merge-gap cannot be negative", "input")
         a.overlay = True
     if a.overlay:
-        if a.comp in ("Jumpcut", "Highlights", "BeatMontage"):
-            die(f"--overlay cannot do {a.comp}: its cuts move the picture itself (overlay works for "
+        if a.comp in ("Jumpcut", "Highlights", "BeatMontage", "Pip"):
+            die(f"--overlay cannot do {a.comp}: it changes the picture itself (overlay works for "
                 "Captioned, PeakPulse, Titled, Karaoke)", "input")
         if a.aspect not in (None, "source") or a.width is not None or a.fit not in (None, "contain"):
             die("--overlay draws on the source's own frame: drop --aspect / --width / --fit", "input")

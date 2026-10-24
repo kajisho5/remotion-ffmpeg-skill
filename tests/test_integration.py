@@ -148,6 +148,32 @@ class Analyze(unittest.TestCase):
         else:
             self.assertIn("--place", sp["reason"])
 
+    def test_pip_offset_is_measured_from_the_audio(self):
+        # the camera is the source's own audio from 1.5 s on, over another picture
+        cam = self.tmp / "camera.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1.5", "-i", str(self.src),
+                        "-f", "lavfi", "-i", "smptebars=size=320x180:rate=30:duration=6.5",
+                        "-map", "1:v", "-map", "0:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                        "-shortest", str(cam)], check=True)
+        tl = self.tmp / "pip.timeline.json"
+        code, res = script("analyze", self.src, "--pip", cam, "-o", tl, "--no-scenes")
+        self.assertEqual(code, 0, res)
+        pip = json.loads(tl.read_text(encoding="utf-8"))["pip"]
+        self.assertAlmostEqual(pip["offset"], 1.5, delta=0.05)
+        self.assertTrue(pip["measured"])
+        self.assertEqual((pip["width"], pip["height"]), (320, 180))
+        code, res = script("analyze", self.src, "--pip", cam, "--pip-offset", "-2", "-o", self.tmp / "p2.json",
+                           "--no-scenes")
+        self.assertEqual(code, 0, res)
+        code, res = script("analyze", self.src, "--pip", cam, "--pip-offset", "30", "-o", self.tmp / "p3.json",
+                           "--no-scenes")
+        self.assertEqual((code, res["kind"]), (2, "input"))  # never overlaps
+        proj = self.tmp / "proj_pip"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--comp", "Pip", "--timeline", tl, "--overlay",
+                           "-o", self.tmp / "x.mp4", "--dry-run")
+        self.assertEqual((code, res["kind"]), (2, "input"))
+
     def test_brand_logo_goes_to_the_template(self):
         bdir = self.tmp / "brand"
         bdir.mkdir(exist_ok=True)
