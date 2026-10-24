@@ -12,13 +12,13 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Transparent graphics layer (`--overlay --keep-graphics`)
 - ✅ Several inputs joined by ffmpeg-skill before measuring
 - ✅ Machine-readable contract + MCP server
-- ✅ Agent evals (9 tasks, grader; three runs, the last with a neutral prompt and both routes accepted where ffmpeg-skill alone is valid)
+- ✅ Agent evals (12 tasks, grader; three runs, the last with a neutral prompt and both routes accepted where ffmpeg-skill alone is valid)
 - ✅ Karaoke captions from word timings
 - ✅ CI on Linux, macOS and Windows with real renders
 - ✅ `--sparse`: draw only the stretches of long footage where captions, lower thirds or scene titles show (uses ffmpeg-skill `overlay.py --place`; falls back to the full layer without it)
 
 ## Next
-- 🔜 More eval tasks (options typos, long footage, a Reel that must keep the whole frame)
+- 🔜 Check `--sparse` in CI once ffmpeg-skill with `overlay.py --place` is released
 
 ## Ideas
 - 💡 Brand file (`brand.json`, shared with ffmpeg-skill) for colours, fonts and logo
