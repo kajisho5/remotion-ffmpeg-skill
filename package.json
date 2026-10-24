@@ -38,7 +38,8 @@
     "references",
     "mcp",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "!**/__pycache__"
   ],
   "engines": {
     "node": ">=18"

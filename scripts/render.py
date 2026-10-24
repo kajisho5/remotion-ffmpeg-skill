@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _sparse
 from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
                      ffskill, ffskill_cmd, frame_size, info, load_options, load_timeline, prepare_props, refuse_existing,
                      remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
@@ -43,6 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); "
                         "with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut)")
     p.add_argument("--keep-graphics", action="store_true", help="with --overlay: keep the transparent graphics .mov")
+    p.add_argument("--sparse", action="store_true",
+                   help="overlay mode that draws only the frames where captions show (Captioned / Karaoke) and "
+                        "places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long "
+                        "footage with gaps between captions. Falls back to the full-length layer (and says why) "
+                        "when this ffmpeg-skill has no --place or the source does not start at 0")
+    p.add_argument("--merge-gap", type=float, default=2.0,
+                   help="with --sparse: captions closer than this many seconds are drawn as one stretch (default 2)")
     add_frame_args(p)
     add_common(p)
     return p
@@ -126,6 +134,52 @@ def verify(out_probe: Dict[str, Any], timeline: Dict[str, Any], comp: str,
     return all(r["status"] != "FAIL" for r in rows), rows
 
 
+def ffskill_can_place() -> bool:
+    """Whether this ffmpeg-skill's overlay.py has --place (ffmpeg-skill PR #353)."""
+    import subprocess
+    try:
+        proc = subprocess.run(ffskill_cmd("overlay", ["--help"]), capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return "--place" in (proc.stdout or "")
+
+
+def sparse_plan(timeline: Dict[str, Any], a: argparse.Namespace) -> Dict[str, Any]:
+    """What --sparse will draw, or why it falls back to the full-length layer."""
+    src = timeline["source"]
+    fps = float(src["fps"])
+    total = expected_frames(a.comp, timeline) or 1
+    plan: Dict[str, Any] = {"used": False, "reason": None, "stretches": 0, "drawn_frames": total,
+                            "source_frames": total, "timeline": None, "place": []}
+    stretches = _sparse.caption_stretches(timeline, a.merge_gap)
+    start = None
+    if stretches and src.get("path") and not STATE.dry_run:
+        # the source as it is now (older timelines do not record where its first picture sits)
+        start = (ffskill("probe", [str(src["path"])], allow_fail=True).get("video") or {}).get("start_time")
+    if not stretches:
+        plan["reason"] = "no captions to draw"
+    elif len(stretches) > _sparse.MAX_STRETCHES:
+        plan["reason"] = (f"{len(stretches)} caption stretches (over {_sparse.MAX_STRETCHES}); raise --merge-gap")
+    elif isinstance(start, (int, float)) and abs(start) > 0.5 / fps:
+        plan["reason"] = (f"the source's first picture is at {start:.3f} s, not 0: placed stretches would be "
+                          "shifted by that much")
+    elif not ffskill_can_place():
+        plan["reason"] = "this ffmpeg-skill's overlay.py has no --place yet (update ffmpeg-skill)"
+    else:
+        packed, layout = _sparse.pack(timeline, stretches)
+        drawn = _sparse.packed_frames(layout)
+        if drawn >= total:
+            plan["reason"] = "captions cover the whole source: nothing to skip"
+        else:
+            plan.update(used=True, stretches=len(layout), drawn_frames=drawn, timeline=packed,
+                        place=_sparse.place_args(layout, fps))
+    if plan["reason"]:
+        info(f"--sparse: drawing the full length instead ({plan['reason']})")
+    else:
+        info(f"--sparse: drawing {plan['drawn_frames']} of {total} frames in {plan['stretches']} stretch(es)")
+    return plan
+
+
 def main() -> None:
     a = build_parser().parse_args()
     apply_common(a)
@@ -147,6 +201,13 @@ def main() -> None:
     output = output.resolve()
     refuse_existing(output)
 
+    if a.sparse:
+        if a.comp not in _sparse.SPARSE_COMPOSITIONS:
+            die(f"--sparse draws caption stretches only: {a.comp} is not one of "
+                f"{', '.join(_sparse.SPARSE_COMPOSITIONS)} (use --overlay for the full-length layer)", "input")
+        if a.merge_gap < 0:
+            die("--merge-gap cannot be negative", "input")
+        a.overlay = True
     if a.overlay:
         if a.comp in ("Jumpcut", "Highlights", "BeatMontage"):
             die(f"--overlay cannot do {a.comp}: its cuts move the picture itself (overlay works for "
@@ -158,18 +219,24 @@ def main() -> None:
         if not timeline["source"].get("has_video"):
             die("--overlay needs a video source to composite onto", "input")
 
-    props_path, frame, font_note = prepare_props(project, a.comp, timeline, options, a)
+    sparse = sparse_plan(timeline, a) if a.sparse else None
+    drawn = sparse["timeline"] if sparse and sparse["used"] else timeline
+    props_path, frame, font_note = prepare_props(project, a.comp, drawn, options, a)
     if font_note:
         info(font_note)
     graphics = output.with_name(output.stem + ".graphics.mov") if a.overlay else output
     cmd = remotion_render_cmd(project, a.comp, graphics, props_path, a)
     ov_args = [timeline["source"]["path"], "--video", str(graphics), "--position", "0,0", "--margin", "0",
                "-o", str(output)] + (["--overwrite"] if STATE.overwrite else [])
+    if sparse and sparse["used"]:
+        ov_args += sparse["place"]
+    sparse_note = None if not sparse else {k: sparse[k] for k in ("used", "reason", "stretches", "drawn_frames",
+                                                                  "source_frames")}
     if STATE.dry_run:
         plan = [shell_join(cmd)] + ([shell_join(ffskill_cmd("overlay", ov_args))] if a.overlay else [])
         emit({"output": str(output), "commands": plan, "props": str(props_path),
               "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline),
-              "frame": frame, "font": font_note},
+              "frame": frame, "font": font_note, "sparse": sparse_note},
              f"would render {a.comp} -> {output}")
         return
 
@@ -182,6 +249,13 @@ def main() -> None:
         tail = remotion_error((proc.stderr or "") + "\n" + (proc.stdout or ""))
         die(f"Remotion render failed (exit {proc.returncode}):\n{tail}", "failed", command=shell_join(cmd))
     commands = [shell_join(cmd)]
+    if sparse and sparse["used"]:
+        # the packed layer must hold exactly the frames the placements read
+        gp = ffskill("probe", [str(graphics)])
+        nb = (gp.get("video") or {}).get("nb_frames")
+        if isinstance(nb, int) and nb != sparse["drawn_frames"]:
+            die(f"--sparse: the drawn layer has {nb} frames, the placements expect {sparse['drawn_frames']}",
+                "failed", command=shell_join(cmd))
     if a.overlay:
         info(f"compositing the graphics over the source with ffmpeg-skill overlay.py -> {output}")
         ov = ffskill("overlay", ov_args)
@@ -213,7 +287,7 @@ def main() -> None:
     result = {"status": "completed" if ok else "failed", "output": str(output), "verified": ok,
               "verification": rows, "commands": commands, "look": look, "summary": summary,
               "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full", "look_error": look_error,
-              "graphics": str(graphics) if a.overlay and a.keep_graphics else None,
+              "graphics": str(graphics) if a.overlay and a.keep_graphics else None, "sparse": sparse_note,
               "kind": None if ok else "failed",
               "error": None if ok else "verification failed: " + ", ".join(r["check"] for r in rows if r["status"] == "FAIL")}
     table = "\n".join(f"  {r['check']:<9} {r['status']:<4}  {r['value']} (expected {r['expected']})" for r in rows)

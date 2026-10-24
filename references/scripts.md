@@ -94,7 +94,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 - Role: execution — writes a new media artifact; inputs are never modified
 - Writes: video file (+ contact sheet PNG)
 - Verifies: exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch
-- ffmpeg-skill: probe, look, overlay (--overlay), _contract doctor (CJK font lookup)
+- ffmpeg-skill: probe, look, overlay (--overlay; --place with --sparse), _contract doctor (CJK font lookup)
 - `--dry-run`: plans without writing
 
 | Argument | Type | Default | Meaning |
@@ -112,15 +112,17 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--no-look` | boolean |  | skip the contact sheet |
 | `--overlay` | boolean |  | draw the graphics only as a transparent ProRes 4444 layer and composite it over the untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut) |
 | `--keep-graphics` | boolean |  | with --overlay: keep the transparent graphics .mov |
+| `--sparse` | boolean |  | overlay mode that draws only the frames where captions show (Captioned / Karaoke) and places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long footage with gaps between captions. Falls back to the full-length layer (and says why) when this ffmpeg-skill has no --place or the source does not start at 0 |
+| `--merge-gap` | number | `2.0` | with --sparse: captions closer than this many seconds are drawn as one stretch (default 2) |
 | `--aspect` | string: source / 16:9 / 9:16 / 1:1 / 4:5 / 4:3 |  | output shape (default: the source's own). 9:16 for Reels/TikTok/Shorts, 1:1, 4:5, 16:9 |
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
---json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `kind` (null|failed), `error` (null|str (which verification rows failed))
+--json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `sparse` (null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)), `kind` (null|failed), `error` (null|str (which verification rows failed))
 
---dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `props` (str), `expected_frames` (int|null), `frame` (object|null), `font` (str|null)
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `props` (str), `expected_frames` (int|null), `frame` (object|null), `font` (str|null), `sparse` (null|object (--sparse))
 
 ## deliver.py
 

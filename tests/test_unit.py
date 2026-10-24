@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import _captions  # noqa: E402
 import _common  # noqa: E402
+import _sparse  # noqa: E402
 import render  # noqa: E402
 
 
@@ -238,6 +239,43 @@ class TemplateParity(unittest.TestCase):
         root = (ROOT / "templates" / "remotion-project" / "src" / "Root.tsx").read_text(encoding="utf-8")
         for comp in _common.BUILTIN_COMPOSITIONS:
             self.assertIn(f'id="{comp}"', root)
+
+
+class Sparse(unittest.TestCase):
+    T = {"source": {"fps": 30.0, "duration": 60.0},
+         "captions": [{"start": 1, "end": 3, "text": "a"}, {"start": 3.5, "end": 5, "text": "b"},
+                      {"start": 30, "end": 32, "text": "c"}],
+         "words": [{"start": 1.01, "end": 1.4, "text": " a"}, {"start": 29.99, "end": 30.6, "text": " c"}],
+         "scenes": [{"start": 0, "end": 60}], "peaks": [{"time": 10, "rms": 0.5}]}
+
+    def test_close_cues_share_a_stretch(self):
+        self.assertEqual(_sparse.caption_stretches(self.T, 2.0), [(30, 150), (900, 960)])
+        self.assertEqual(_sparse.caption_stretches(self.T, 0.0), [(30, 90), (105, 150), (900, 960)])
+
+    def test_packed_back_to_back_with_one_blank_frame(self):
+        packed, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        self.assertEqual(layout, [(0, 120, 30), (121, 60, 900)])
+        self.assertEqual(_sparse.packed_frames(layout), 181)
+        self.assertEqual(_common.sec_to_frames(packed["source"]["duration"], 30.0), 181)
+        self.assertEqual([_common.sec_to_frames(c["start"], 30.0) for c in packed["captions"]], [0, 75, 121])
+        self.assertEqual(packed["scenes"], [])
+        self.assertEqual(packed["peaks"], [])
+
+    def test_shift_is_whole_frames_so_sub_frame_word_times_survive(self):
+        packed, _ = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        w0, w1 = packed["words"]
+        self.assertAlmostEqual(w0["start"] * 30, 1.01 * 30 - 30, places=6)
+        # a word starting just before its cue still goes with it (Karaoke assigns words by midpoint)
+        self.assertAlmostEqual(w1["start"] * 30, 29.99 * 30 - (900 - 121), places=6)
+
+    def test_place_ranges_sit_half_a_frame_inside(self):
+        _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        self.assertEqual(_sparse.place_args(layout, 30.0),
+                         ["--place", "0.000000-3.983333@1.000000", "--place", "4.016667-6.016667@30.000000"])
+
+    def test_cue_past_the_end_is_kept_inside(self):
+        t = {"source": {"fps": 30.0, "duration": 2.0}, "captions": [{"start": 1.5, "end": 9, "text": "x"}]}
+        self.assertEqual(_sparse.caption_stretches(t, 2.0), [(45, 60)])
 
 
 if __name__ == "__main__":

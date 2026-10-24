@@ -48,7 +48,9 @@ const KaraokeCue: React.FC<{ cue: Caption; words: Caption[]; len: number; o: Opt
   const fade = Math.min(6, Math.floor(len / 3));
   const exit = fade > 0 ? interpolate(frame, [len - fade, len], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 1;
   const size = Math.round(Math.min(width, height) * o.captionSize * 1.1);
-  const now = cue.start + frame / fps; // source time at this frame
+  // Source time at this frame. The microsecond nudge settles a word boundary that falls exactly on a
+  // frame (5.2 + 21/30 vs 5.9) the same way whatever float rounding produced the two numbers.
+  const now = cue.start + frame / fps + 1e-6;
   const lang = /[぀-ヿ]/.test(cue.text) ? "ja" : /[가-힯]/.test(cue.text) ? "ko" : undefined;
   return (
     <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: captionMarginPx(o, width, height) }}>

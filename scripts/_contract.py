@@ -62,7 +62,7 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "summary": "Render a composition from a timeline, verify it (frames, fps, size, audio) and write a contact sheet.",
         "writes": "video file (+ contact sheet PNG)",
         "verification": "exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch",
-        "ffmpeg_skill": ["probe", "look", "overlay (--overlay)", "_contract doctor (CJK font lookup)"],
+        "ffmpeg_skill": ["probe", "look", "overlay (--overlay; --place with --sparse)", "_contract doctor (CJK font lookup)"],
         "dry_run": True,
     },
     "deliver": {
@@ -114,10 +114,12 @@ OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
         "result": {"verified": "bool", "verification": "list[{check, status, value, expected}]",
                    "commands": "list[str]", "look": "str|null (contact sheet PNG)", "look_error": "str|null",
                    "summary": "str", "frame": "object|null", "font": "str|null", "mode": "full|overlay",
-                   "graphics": "str|null (kept ProRes 4444 layer)", "kind": "null|failed",
+                   "graphics": "str|null (kept ProRes 4444 layer)",
+                   "sparse": "null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)",
+                   "kind": "null|failed",
                    "error": "null|str (which verification rows failed)"},
         "dry_run": {"commands": "list[str]", "props": "str", "expected_frames": "int|null", "frame": "object|null",
-                    "font": "str|null"},
+                    "font": "str|null", "sparse": "null|object (--sparse)"},
     },
     "deliver": {
         "result": {"checked": "str", "platform": "str|null", "verified": "bool",

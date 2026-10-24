@@ -130,6 +130,24 @@ class Analyze(unittest.TestCase):
         self.assertIn("prores-profile=4444", res["commands"][0])
         self.assertIn("overlay.py", res["commands"][1])
 
+    def test_sparse_plans_placements_or_says_why_not(self):
+        proj = self.tmp / "proj3"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--timeline", self.tl, "--sparse", "--comp", "Jumpcut",
+                           "-o", self.tmp / "sp.mp4", "--dry-run")
+        self.assertEqual((code, res["kind"]), (2, "input"))
+        code, res = script("render", "--project", proj, "--timeline", self.tl, "--sparse", "--comp", "Captioned",
+                           "--merge-gap", "0", "-o", self.tmp / "sp.mp4", "--dry-run")
+        self.assertEqual(code, 0, res)
+        sp = res["sparse"]
+        if sp["used"]:
+            # three cues, the middle one inside the silence: three stretches, each placed
+            self.assertEqual(sp["stretches"], 3)
+            self.assertEqual(res["commands"][1].count("--place"), 3)
+            self.assertLess(sp["drawn_frames"], sp["source_frames"])
+        else:
+            self.assertIn("--place", sp["reason"])
+
     def test_several_inputs_are_joined_then_measured(self):
         b = self.tmp / "b.mp4"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=2",
@@ -184,6 +202,25 @@ class Analyze(unittest.TestCase):
         self.assertEqual(code, 0, res)
         self.assertEqual(res["mode"], "overlay")
         self.assertTrue(res["verified"])
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_sparse_matches_the_full_layer(self):
+        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                           "-o", self.tmp / "sp_full.mp4", "--overlay", "--no-look")
+        self.assertEqual(code, 0, res)
+        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                           "-o", self.tmp / "sp_sparse.mp4", "--sparse", "--merge-gap", "0", "--no-look")
+        self.assertEqual(code, 0, res)
+        if not res["sparse"]["used"]:
+            self.skipTest(res["sparse"]["reason"])
+        self.assertTrue(res["verified"])
+        stats = self.tmp / "psnr.txt"
+        subprocess.run(["ffmpeg", "-v", "error", "-i", str(self.tmp / "sp_full.mp4"), "-i", str(self.tmp / "sp_sparse.mp4"),
+                        "-lavfi", f"[0:v][1:v]psnr=stats_file={stats.name}", "-f", "null", "-"],
+                       check=True, cwd=self.tmp)
+        rows = stats.read_text().split("\n")
+        differ = [r for r in rows if r.strip() and "psnr_avg:inf" not in r]
+        self.assertEqual(differ, [], "sparse output differs from the full-length layer")
 
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_renders_verify(self):

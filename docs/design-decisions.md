@@ -16,6 +16,8 @@ Report one as a defect only if its reason no longer holds.
 | Highlights are stored in source order, not rank order | a reel reads chronologically; the ranking is ffmpeg-skill's proposal, not a verdict | `analyze.py` |
 | BeatMontage cuts on scene changes when no usable beat grid exists | never invent beats | `BeatMontage.tsx` doc comment |
 | Without `--width`, a changed aspect keeps the source's short side | no upscaling (720p → 720×1280) | `test_unit.OutputFrame` |
+| `--sparse` falls back to the full-length layer instead of failing | the picture is the same either way, only slower; a missing `--place` or a source whose first picture is not at 0 would otherwise misplace stretches. `sparse.reason` says why | `test_integration.Analyze.test_sparse_plans_placements_or_says_why_not` |
+| Karaoke's clock is nudged by a microsecond | a word boundary exactly on a frame (5.2 + 21/30 vs 5.9) must resolve the same way in the full and the packed (`--sparse`) timeline | `test_integration.Analyze.test_real_sparse_matches_the_full_layer` |
 | `references/scripts.md` is generated | it cannot drift from the parsers | `test_contract.Transport.test_generated_reference_is_current` |
 
 The Japanese design memo with measurements is [`design.ja.md`](design.ja.md).

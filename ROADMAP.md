@@ -15,12 +15,13 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Agent evals (9 tasks, grader; three runs, the last with a neutral prompt and both routes accepted where ffmpeg-skill alone is valid)
 - ✅ Karaoke captions from word timings
 - ✅ CI on Linux, macOS and Windows with real renders
+- ✅ `--sparse`: draw only the captioned stretches of long footage (uses ffmpeg-skill `overlay.py --place`; falls back to the full layer without it)
 
 ## Next
 - 🔜 More eval tasks (options typos, long footage, a Reel that must keep the whole frame)
-- 🔜 Render only the captioned ranges for long footage — needs an ffmpeg-skill overlay that can start a layer at a time offset (upstream change)
 
 ## Ideas
+- 💡 `--sparse` for Titled (lower thirds and scene titles are sparse too; their on-screen length lives in TypeScript)
 - 💡 Brand file (`brand.json`, shared with ffmpeg-skill) for colours, fonts and logo
 - 💡 Chapter cards from YouTube chapter lists
 - 💡 Picture-in-picture from a second measured source (screen + camera)
