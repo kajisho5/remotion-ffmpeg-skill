@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import BUILTIN_COMPOSITIONS, HERE, STATE, add_common, apply_common, die, emit, info, shell_join
+from _common import (ASPECTS, BUILTIN_COMPOSITIONS, FITS, HERE, STATE, add_common, apply_common, die, emit, info,
+                     platform_aspect, shell_join)
 from deliver import PLATFORMS
 
 
@@ -32,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
     p.add_argument("--fast", action="store_true", help="preview-quality render")
+    p.add_argument("--aspect", choices=["source", *ASPECTS],
+                   help="output shape (default: the shape the --platform template delivers, else the source's)")
+    p.add_argument("--width", type=int, help="output width in px")
+    p.add_argument("--fit", choices=FITS, help="blur (default when the shape changes), contain or cover")
+    p.add_argument("--font-file", help="caption font file")
     add_common(p)
     return p
 
@@ -82,6 +88,14 @@ def main() -> None:
         r_args += ["--options", a.options]
     if a.fast:
         r_args.append("--fast")
+    # Draw in the shape the delivery template will produce: a 16:9 render pushed through the Reels
+    # template would be centre-cropped to 9:16 and lose the edges of every caption.
+    aspect = a.aspect or platform_aspect(a.platform)
+    if aspect:
+        r_args += ["--aspect", aspect]
+    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file)):
+        if val is not None:
+            r_args += [flag, str(val)]
     rendered = step("draw", "render", r_args, steps)
 
     delivered = None

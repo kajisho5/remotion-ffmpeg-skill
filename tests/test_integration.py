@@ -105,6 +105,39 @@ class Analyze(unittest.TestCase):
         self.assertEqual(res["expected_frames"], _common.expected_frames("Jumpcut", self.timeline))
         self.assertIn("render src/index.ts Jumpcut", res["commands"][0])
 
+    def test_overlay_refuses_what_it_cannot_do(self):
+        proj = self.tmp / "proj2"
+        script("init", proj)
+        for extra in (["--comp", "Jumpcut"], ["--comp", "Captioned", "--aspect", "9:16"],
+                      ["--comp", "Captioned", "--fast"]):
+            with self.subTest(extra=extra):
+                code, res = script("render", "--project", proj, "--timeline", self.tl, "--overlay",
+                                   "-o", self.tmp / "ov.mp4", "--dry-run", *extra)
+                self.assertEqual(code, 2, res)
+                self.assertEqual(res["kind"], "input")
+        code, res = script("render", "--project", proj, "--timeline", self.tl, "--overlay", "--comp", "Captioned",
+                           "-o", self.tmp / "ov.mp4", "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertIn("prores-profile=4444", res["commands"][0])
+        self.assertIn("overlay.py", res["commands"][1])
+
+    def test_platform_aspect_comes_from_ffmpeg_skill_templates(self):
+        self.assertEqual(_common.platform_aspect("reels"), "9:16")
+        self.assertEqual(_common.platform_aspect("youtube"), "16:9")
+        self.assertIsNone(_common.platform_aspect("podcast"))
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_portrait_and_overlay(self):
+        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                           "-o", self.tmp / "portrait.mp4", "--aspect", "9:16", "--fast")
+        self.assertEqual(code, 0, res)
+        self.assertEqual(res["frame"], {"width": 720, "height": 1280, "fit": "blur"})
+        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                           "-o", self.tmp / "overlay.mp4", "--overlay")
+        self.assertEqual(code, 0, res)
+        self.assertEqual(res["mode"], "overlay")
+        self.assertTrue(res["verified"])
+
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_renders_verify(self):
         for comp in _common.BUILTIN_COMPOSITIONS:

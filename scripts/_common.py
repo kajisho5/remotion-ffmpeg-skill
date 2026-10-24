@@ -298,33 +298,183 @@ def stage_source(project: Path, source_path: str) -> str:
     src = Path(source_path).expanduser().resolve()
     if not src.is_file():
         die(f"source in the timeline does not exist any more: {src}", "input")
+    return _stage(project, src, "media")
+
+
+def _stage(project: Path, src: Path, folder: str) -> str:
     st = src.stat()
     tag = hashlib.sha1(f"{src}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()[:8]
-    rel = f"media/{tag}_{src.name}"
+    rel = f"{folder}/{tag}_{src.name}"
     dst = project / "public" / rel
-    if STATE.dry_run or dst.exists():
+    if STATE.dry_run:
+        return rel
+    if dst.is_symlink():          # left by an older version or by hand: Remotion cannot serve it
+        dst.unlink()
+    elif dst.exists():
         return rel
     dst.parent.mkdir(parents=True, exist_ok=True)
+    # A hard link (instant, no extra space), else a one-time copy. Never a symlink: Remotion's file
+    # server refuses a public/ symlink that points outside the project (404 at render time).
+    # Remotion's CLI itself links the whole public/ folder into its temporary bundle on macOS/Linux,
+    # so the source is not copied again per render; on Windows the CLI copies public/ each time.
     try:
-        os.link(src, dst)            # same filesystem: instant, no extra space
+        os.link(src, dst)
     except OSError:
-        try:
-            os.symlink(src, dst)
-        except OSError:
-            shutil.copy2(src, dst)
+        info(f"copying {src.name} into the project (hard link not possible across drives) ...")
+        shutil.copy2(src, dst)
     return rel
 
 
-def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dict[str, Any]) -> Tuple[Path, Dict[str, Any]]:
+# ---------------------------------------------------------------- output frame
+
+ASPECTS = {"16:9": (16, 9), "9:16": (9, 16), "1:1": (1, 1), "4:5": (4, 5), "4:3": (4, 3)}
+FITS = ("blur", "contain", "cover")
+
+
+def even(n: float) -> int:
+    return max(2, int(round(n / 2.0)) * 2)
+
+
+def output_frame(timeline: Dict[str, Any], aspect: Optional[str], width: Optional[int],
+                 fit: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The output frame for --aspect/--width/--fit, or None for the source's own size.
+
+    Without --width the output keeps the source's short side (720p stays 720 wide when turned
+    portrait: 720x1280), so nothing is upscaled; sizes are rounded to even numbers for H.264.
+    """
+    src = timeline["source"]
+    sw, sh = int(src["width"]), int(src["height"])
+    if (aspect in (None, "source")) and width is None:
+        return None if fit in (None, "contain") else {"width": sw, "height": sh, "fit": fit}
+    if aspect in (None, "source"):
+        aw, ah = sw, sh
+    else:
+        aw, ah = ASPECTS[aspect]
+    if width is not None:
+        w = even(width)
+        h = even(w * ah / aw)
+    else:
+        short = min(sw, sh)
+        if aw <= ah:
+            w = even(short)
+            h = even(w * ah / aw)
+        else:
+            h = even(short)
+            w = even(h * aw / ah)
+    return {"width": w, "height": h, "fit": fit or ("blur" if aspect not in (None, "source") else "contain")}
+
+
+def frame_size(timeline: Dict[str, Any], frame: Optional[Dict[str, Any]]) -> Tuple[int, int]:
+    if frame:
+        return int(frame["width"]), int(frame["height"])
+    return int(timeline["source"]["width"]), int(timeline["source"]["height"])
+
+
+def platform_aspect(platform: Optional[str]) -> Optional[str]:
+    """The aspect ffmpeg-skill's delivery template for this platform produces (its frame.aspect)."""
+    if not platform:
+        return None
+    skill = find_ffmpeg_skill()
+    if skill is None:
+        return None
+    try:
+        tpl = json.loads((skill / "templates" / f"{platform}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    aspect = (tpl.get("frame") or {}).get("aspect")
+    return aspect if aspect in ASPECTS else None
+
+
+# ---------------------------------------------------------------- fonts
+
+def caption_script(captions: List[Dict[str, Any]]) -> Optional[str]:
+    """ja / ko / zh when the caption text needs a CJK font, else None (Latin etc. render with system fonts)."""
+    text = "".join(c.get("text", "") for c in captions)
+    if any("぀" <= ch <= "ヿ" for ch in text):
+        return "ja"
+    if any("가" <= ch <= "힯" or "ᄀ" <= ch <= "ᇿ" for ch in text):
+        return "ko"
+    if any("一" <= ch <= "鿿" or "㐀" <= ch <= "䶿" for ch in text):
+        return "ja"  # Han only: Japanese glyph forms by default; --font-file picks another
+    return None
+
+
+def cjk_font_file(script: str) -> Optional[Path]:
+    """The font file ffmpeg-skill's doctor resolves for this script on this machine."""
+    skill = find_ffmpeg_skill()
+    if skill is None:
+        return None
+    proc = subprocess.run([sys.executable, str(skill / "scripts" / "_contract.py"), "doctor", "--json"],
+                          capture_output=True, text=True, timeout=120)
+    try:
+        entry = json.loads(proc.stdout)["fonts"]["scripts"].get(script) or {}
+    except (ValueError, KeyError, TypeError):
+        return None
+    f = entry.get("file")
+    return Path(f) if entry.get("status") == "available" and f and Path(f).is_file() else None
+
+
+def stage_font(project: Path, font_file: Path) -> Dict[str, str]:
+    if not font_file.is_file():
+        die(f"font file not found: {font_file}", "input")
+    if font_file.suffix.lower() not in (".ttf", ".otf", ".ttc", ".otc", ".woff", ".woff2"):
+        die(f"{font_file.name}: use a .ttf, .otf, .ttc, .woff or .woff2 font", "input")
+    rel = _stage(project, font_file.resolve(), "fonts")
+    return {"src": rel, "family": "RFS " + Path(rel).name.split("_", 1)[0]}
+
+
+def resolve_font(project: Path, timeline: Dict[str, Any], font_file: Optional[str],
+                 auto: bool) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
+    """(font asset for the props, a note for the report). A given --font-file always wins; otherwise
+    CJK captions get the CJK font ffmpeg-skill finds on this machine, so they never render as tofu."""
+    if font_file:
+        return stage_font(project, Path(font_file).expanduser()), f"font: {font_file}"
+    script = caption_script(timeline.get("captions") or [])
+    if not script or not auto:
+        return None, None
+    found = cjk_font_file(script)
+    if found is None:
+        return None, (f"captions need a {script} font and none was found on this machine: install one "
+                      f"(e.g. Noto Sans CJK) or pass --font-file; the contact sheet will show tofu otherwise")
+    return stage_font(project, found), f"font: {found} (found by ffmpeg-skill for {script} captions)"
+
+
+def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dict[str, Any],
+                frame: Optional[Dict[str, Any]] = None, font: Optional[Dict[str, str]] = None,
+                overlay: bool = False) -> Tuple[Path, Dict[str, Any]]:
     t = json.loads(json.dumps(timeline))
     src = t["source"].get("path")
-    t["source"]["src"] = stage_source(project, src) if src and t["source"].get("has_video", True) else None
-    props = {"timeline": t, "options": options}
+    has_media = t["source"].get("has_video", True) or t["source"].get("has_audio", False)
+    t["source"]["src"] = stage_source(project, src) if src and has_media and not overlay else None
+    props = {"timeline": t, "options": options, "frame": frame, "font": font, "overlay": overlay}
     path = project / ".rfs" / f"props-{comp}.json"
     if not STATE.dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")
     return path, props
+
+
+def add_frame_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("output frame and font")
+    g.add_argument("--aspect", choices=["source", *ASPECTS], default=None,
+                   help="output shape (default: the source's own). 9:16 for Reels/TikTok/Shorts, 1:1, 4:5, 16:9")
+    g.add_argument("--width", type=int, help="output width in px (default: keep the source's short side)")
+    g.add_argument("--fit", choices=FITS, help="how the source fills another shape: blur (default when the shape "
+                                                "changes), contain (bars) or cover (crop)")
+    g.add_argument("--font-file", help="caption font file (.ttf/.otf/.ttc/.woff2), staged into the project")
+    g.add_argument("--no-auto-font", action="store_true",
+                   help="don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions")
+
+
+def prepare_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dict[str, Any],
+                  a: argparse.Namespace) -> Tuple[Path, Optional[Dict[str, Any]], Optional[str]]:
+    """Frame + font + props file for render.py / still.py. Returns (props path, frame, font note)."""
+    if a.width is not None and a.width < 16:
+        die("--width must be at least 16 px", "input")
+    frame = output_frame(timeline, a.aspect, a.width, a.fit)
+    font, note = resolve_font(project, timeline, a.font_file, not a.no_auto_font)
+    props_path, _ = write_props(project, comp, timeline, options, frame, font, bool(getattr(a, "overlay", False)))
+    return props_path, frame, note
 
 
 def load_options(path: Optional[str]) -> Dict[str, Any]:

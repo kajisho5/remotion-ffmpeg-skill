@@ -1,0 +1,79 @@
+name: release
+
+# Release whenever package.json's version has no matching tag yet:
+#   1. bump "version" in package.json and add a "## X.Y.Z" section to CHANGELOG.md in the same PR
+#   2. merge to main -> this job tags vX.Y.Z, publishes a GitHub Release with that CHANGELOG
+#      section as notes, and publishes to npm (when the NPM_TOKEN secret exists).
+# A push that does not change the version does nothing.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write   # npm publish --provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Is this version released yet?
+        id: v
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION already tagged: nothing to release"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        if: steps.v.outputs.release == 'true'
+        run: |
+          python3 - "${{ steps.v.outputs.version }}" <<'EOF'
+          import re, sys
+          v = sys.argv[1]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## {re.escape(v)}\b.*?$(.*?)(?=^## |\Z)", text, re.S | re.M)
+          if not m:
+              sys.exit(f"CHANGELOG.md has no '## {v}' section: add one in the PR that bumps the version")
+          open("release-notes.md", "w", encoding="utf-8").write(m.group(1).strip() + "\n")
+          EOF
+
+      - name: Tag and GitHub Release
+        if: steps.v.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="v${{ steps.v.outputs.version }}"
+          git tag "$V"
+          git push origin "$V"
+          gh release create "$V" --title "$V" --notes-file release-notes.md
+
+      - uses: actions/setup-node@v4
+        if: steps.v.outputs.release == 'true'
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish to npm
+        if: steps.v.outputs.release == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::notice::NPM_TOKEN secret is not set: skipped npm publish (GitHub Release was made)"
+            exit 0
+          fi
+          npm publish --provenance --access public

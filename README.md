@@ -6,7 +6,9 @@ An [Agent Skill](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/o
 
 Built on [**ffmpeg-skill**](https://github.com/kajisho5/ffmpeg-skill). Unofficial — not affiliated with Remotion.
 
-![Jumpcut composition: silences removed, punch-in on the second cut, captions re-timed (contact sheet written by render.py)](assets/jumpcut-sheet.png)
+![Jumpcut: the silences ffmpeg-skill measured are gone, every other cut punches in, captions re-timed to the new cut](assets/demo-jumpcut.gif)
+
+<sub>Fictional demo footage. Left to right in time: ffmpeg-skill measured two silences and a scene cut; Remotion played only the speech ranges with punch-in zooms and re-timed captions; render.py verified 201 of 201 frames.</sub>
 
 ## Why this and not just Remotion's own skills?
 
@@ -37,6 +39,7 @@ npx remotion-ffmpeg-skill     # this skill, next to it in ~/.claude/skills
 - "Put animated captions from `talk.srt` on `talk.mp4` and make it a YouTube upload."
 - "Cut the silences out of this recording, jump-cut style, and keep the subtitles in sync."
 - "Make graphics that hit on the loud moments of `clip.mp4`, as a Reel."
+- "Japanese captions, vertical, for TikTok." — renders 9:16 with a blurred fill, stages a CJK font automatically, breaks lines between phrases.
 
 ## Under the hood
 
@@ -63,6 +66,14 @@ Every script takes `--json`, `--dry-run`, `--overwrite`, `--timeout`, like ffmpe
 | `Jumpcut` | sum of measured speech ranges | silences removed, punch-in on every other cut, captions re-timed |
 | `PeakPulse` | source duration | edge glow + zoom on measured audio peaks, flash on scene cuts, progress bar |
 
+**Any shape:** `--aspect 9:16 | 1:1 | 4:5 | 16:9` with `--fit blur | contain | cover`; `pipeline.py --platform reels` picks 9:16 from ffmpeg-skill's own template so nothing gets cropped on delivery.
+
+<img src="assets/portrait-ja-still.png" width="270" alt="9:16 still with a Japanese caption, blurred fill behind the 16:9 source">
+
+**Fonts:** Japanese / Chinese / Korean captions get the CJK font ffmpeg-skill finds on the machine, loaded before the first frame — no tofu. `--font-file` for your own.
+
+**A layer for your editor:** `--overlay --keep-graphics` renders the graphics alone as transparent ProRes 4444 and composites it over the untouched source with ffmpeg-skill — keep the `.mov` for Premiere, Resolve or Final Cut.
+
 Colours, font, caption size, zoom and pulse strength are options (`--options look.json`); the timeline format and every option are in [`references/timeline.md`](references/timeline.md). Add your own composition to the generated project and render it with `--comp YourId`.
 
 ### What render.py verifies
@@ -82,6 +93,10 @@ Frame numbers are `Math.round(seconds × fps)` on both sides (TypeScript and Pyt
 
 This skill is MIT. **Remotion itself has its own licence**: free for individuals and for-profit organisations with up to 3 employees; larger companies need a [Remotion company licence](https://www.remotion.dev/license). Using this skill does not change that.
 
+## Speed
+
+Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30 s 1080p30 render takes about 170 s (≈ 5–6× the clip length). Check with `still.py` and `--fast` before a full render of long footage; more CPU cores help (`--concurrency`).
+
 ## Status
 
-0.1.0 — first release. Planned: MCP server and machine-readable contract (as in ffmpeg-skill), beat-grid driven composition, transparent overlay renders (ProRes 4444) composited by ffmpeg-skill, more templates (lower-thirds, titles from scene cuts), demo GIF.
+0.2.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Planned: MCP server and machine-readable contract (as in ffmpeg-skill), agent evals, beat-grid driven composition, lower-thirds and titles from scene cuts, multi-clip sources.

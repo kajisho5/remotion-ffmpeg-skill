@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, apply_common, die, emit, expected_frames, info,
-                     load_options, load_timeline, refuse_existing, remotion_bin, require_project, remotion_error, run,
-                     sec_to_frames, shell_join, write_props)
+from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit,
+                     expected_frames, info, load_options, load_timeline, prepare_props, refuse_existing, remotion_bin,
+                     require_project, remotion_error, run, sec_to_frames, shell_join)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--at", type=float, action="append", default=[], help="time in seconds (repeatable)")
     p.add_argument("--frame", type=int, action="append", default=[], help="frame number (repeatable)")
     p.add_argument("--out-dir", help="folder for the PNGs (default: next to the timeline)")
+    add_frame_args(p)
     add_common(p)
     return p
 
@@ -54,7 +55,9 @@ def main() -> None:
 
     out_dir = Path(a.out_dir).expanduser() if a.out_dir else tl_path.parent
     stem = Path(timeline["source"].get("name") or "still").stem
-    props_path, _ = write_props(project, a.comp, timeline, options)
+    props_path, frame, font_note = prepare_props(project, a.comp, timeline, options, a)
+    if font_note:
+        info(font_note)
     outputs, commands = [], []
     for f in frames:
         out = (out_dir / f"{stem}_{a.comp}_f{f:05d}.png").resolve()
@@ -73,7 +76,7 @@ def main() -> None:
             die(f"Remotion still failed for frame {f}:\n{tail}", "failed", command=shell_join(cmd))
         outputs.append(str(out))
     emit({"output": outputs[0] if outputs else None, "outputs": outputs, "frames": frames,
-          "commands": commands, "verified": not STATE.dry_run},
+          "commands": commands, "verified": not STATE.dry_run, "frame": frame, "font": font_note},
          ("would write " if STATE.dry_run else "Look: ") + ", ".join(outputs))
 
 

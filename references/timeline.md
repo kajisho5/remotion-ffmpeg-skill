@@ -1,7 +1,7 @@
 # timeline.json and composition options
 
 `analyze.py` writes one `timeline.json` per source. The Remotion compositions receive it as
-props (`{ "timeline": ..., "options": ... }`, written by `render.py` / `still.py` to
+props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay": ... }`, written by `render.py` / `still.py` to
 `<project>/.rfs/props-<comp>.json`). The TypeScript type is `Timeline` in
 `templates/remotion-project/src/timeline.ts`.
 
@@ -46,8 +46,8 @@ Every key is optional.
 | `accent` | `#ffcc00` | accent colour (caption underline, glow, progress bar) |
 | `textColor` | `#ffffff` | caption text colour |
 | `fontFamily` | Noto Sans JP, Hiragino Sans, Yu Gothic, … | CSS font stack; the font must exist on the rendering machine |
-| `captionSize` | `0.055` | caption font size as a fraction of frame height |
-| `captionMargin` | `0.08` | caption block bottom margin as a fraction of frame height |
+| `captionSize` | `0.055` | caption font size as a fraction of the frame's short side |
+| `captionMargin` | `null` | caption bottom margin as a fraction of frame height; `null` = 0.08 landscape, 0.2 portrait (clear of Reels / TikTok UI) |
 | `punchIn` | `1.12` | Jumpcut zoom on every other cut (`1` turns it off) |
 | `pulse` | `0.6` | PeakPulse strength, 0..1 |
 | `progressBar` | `true` | PeakPulse progress bar |
@@ -57,6 +57,16 @@ Example:
 ```json
 { "accent": "#38bdf8", "captionSize": 0.065, "punchIn": 1.08 }
 ```
+
+## Render-time props (set by render.py, not measured)
+
+| Prop | From | Meaning |
+|---|---|---|
+| `frame` | `--aspect`, `--width`, `--fit` | `{width, height, fit}` of the output; `null` = the source's own size. Without `--width` the short side of the source is kept (720p → 720×1280 portrait), sizes rounded to even numbers |
+| `font` | `--font-file`, or automatic for CJK captions | `{src, family}`: a font staged into `public/fonts/` and loaded before the first frame |
+| `overlay` | `--overlay` | `true` = graphics only on a transparent background; render.py composites them over the source with ffmpeg-skill `overlay.py` |
+
+`fit`: `blur` (contained over a blurred, cropped copy — default when the shape changes), `contain` (bars), `cover` (crop).
 
 ## Caption files
 

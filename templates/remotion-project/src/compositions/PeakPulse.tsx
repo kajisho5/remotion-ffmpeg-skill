@@ -1,14 +1,15 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
-import { Props, resolveOptions, secToFrames } from "../timeline";
+import { Props, outputFrame, resolveOptions, secToFrames } from "../timeline";
 
 /**
  * PeakPulse: the source, full length, with motion driven by measurements instead of guesses --
  * a frame-edge glow that hits on each audio peak ffmpeg-skill found (scaled by its loudness),
  * a tick at every scene cut, and a progress bar.
  */
-export const PeakPulse: React.FC<Props> = ({ timeline, options }) => {
+export const PeakPulse: React.FC<Props> = (props) => {
+  const { timeline, options, overlay } = props;
   const o = resolveOptions(options);
   const frame = useCurrentFrame();
   const { fps, width, height, durationInFrames } = useVideoConfig();
@@ -35,8 +36,9 @@ export const PeakPulse: React.FC<Props> = ({ timeline, options }) => {
   const barH = Math.max(4, Math.round(height * 0.008));
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <SourceVideo source={timeline.source} style={{ transform: `scale(${1 + 0.02 * o.pulse * hit})` }} />
+    <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
+      {/* In overlay mode the source (and its slight zoom on peaks) is left to the composite step. */}
+      {overlay ? null : <SourceVideo source={timeline.source} fit={outputFrame(props).fit} style={{ transform: `scale(${1 + 0.02 * o.pulse * hit})` }} />}
       <AbsoluteFill style={{ boxShadow: `inset 0 0 ${glow * 2}px ${glow}px ${o.accent}`, opacity: 0.85, pointerEvents: "none" }} />
       {flash > 0 ? <AbsoluteFill style={{ backgroundColor: "white", opacity: 0.18 * flash }} /> : null}
       {o.progressBar ? (

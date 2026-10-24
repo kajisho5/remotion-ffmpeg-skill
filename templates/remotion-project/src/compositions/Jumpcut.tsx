@@ -1,16 +1,21 @@
 import React from "react";
 import { AbsoluteFill, Sequence, Series, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
+import { useStagedFont } from "../lib/useStagedFont";
 import { CaptionCard } from "./Captioned";
-import { Props, resolveOptions, retimeCaptions, secToFrames, speechRanges } from "../timeline";
+import { Props, fontStack, outputFrame, resolveOptions, retimeCaptions, secToFrames, speechRanges } from "../timeline";
 
 /**
  * Jumpcut: plays only the speech ranges ffmpeg-skill measured (silences removed), and punches
  * in on every other cut so the jumps read as intentional. Captions are re-timed onto the new
  * timeline; the part of a cue that falls inside a removed silence is dropped, its text is never rewritten.
  */
-export const Jumpcut: React.FC<Props> = ({ timeline, options }) => {
+export const Jumpcut: React.FC<Props> = (props) => {
+  const { timeline, options, font } = props;
+  useStagedFont(font);
   const o = resolveOptions(options);
+  const family = fontStack(o, font);
+  const fit = outputFrame(props).fit;
   const { fps } = useVideoConfig();
   const ranges = speechRanges(timeline);
   const cues = retimeCaptions(timeline);
@@ -24,7 +29,7 @@ export const Jumpcut: React.FC<Props> = ({ timeline, options }) => {
           return (
             <Series.Sequence key={i} durationInFrames={len} name={`cut ${i + 1}`}>
               <Punch zoom={zoom} len={len}>
-                <SourceVideo source={timeline.source} trimBefore={a} trimAfter={a + len} />
+                <SourceVideo source={timeline.source} fit={fit} trimBefore={a} trimAfter={a + len} />
               </Punch>
             </Series.Sequence>
           );
@@ -32,7 +37,7 @@ export const Jumpcut: React.FC<Props> = ({ timeline, options }) => {
       </Series>
       {cues.map((c, i) => (
         <Sequence key={i} from={c.from} durationInFrames={c.durationInFrames} name={`cue ${i + 1}`} layout="none">
-          <CaptionCard text={c.text} durationInFrames={c.durationInFrames} o={o} />
+          <CaptionCard text={c.text} durationInFrames={c.durationInFrames} o={o} fontFamily={family} />
         </Sequence>
       ))}
     </AbsoluteFill>

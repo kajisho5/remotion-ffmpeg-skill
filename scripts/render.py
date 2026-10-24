@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, apply_common, die, emit, expected_frames, ffskill,
-                     info, load_options, load_timeline, refuse_existing, remotion_bin, require_ffmpeg_skill,
-                     require_project, remotion_error, run, shell_join, write_props)
+from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
+                     ffskill, ffskill_cmd, frame_size, info, load_options, load_timeline, prepare_props, refuse_existing,
+                     remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fast", action="store_true", help="preview quality: half resolution, quicker encode")
     p.add_argument("--concurrency", help="Remotion --concurrency (number or percentage)")
     p.add_argument("--no-look", action="store_true", help="skip the contact sheet")
+    p.add_argument("--overlay", action="store_true",
+                   help="draw the graphics only as a transparent ProRes 4444 layer and composite it over the "
+                        "untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); "
+                        "with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut)")
+    p.add_argument("--keep-graphics", action="store_true", help="with --overlay: keep the transparent graphics .mov")
+    add_frame_args(p)
     add_common(p)
     return p
 
@@ -53,6 +59,16 @@ def parse_frames(spec: Optional[str]) -> Optional[Tuple[int, int]]:
 
 
 def remotion_render_cmd(project: Path, comp: str, output: Path, props: Path, a: argparse.Namespace) -> List[str]:
+    if getattr(a, "overlay", False):
+        # Transparent graphics layer: PNG frames keep the alpha, ProRes 4444 carries it.
+        cmd = [str(remotion_bin(project)), "render", "src/index.ts", comp, str(output), f"--props={props}",
+               "--codec=prores", "--prores-profile=4444", "--image-format=png", "--pixel-format=yuva444p10le",
+               "--log=warn"]
+        if a.frames:
+            cmd.append(f"--frames={a.frames}")
+        if a.concurrency:
+            cmd.append(f"--concurrency={a.concurrency}")
+        return cmd
     cmd = [str(remotion_bin(project)), "render", "src/index.ts", comp, str(output), f"--props={props}",
            f"--codec={a.codec}", "--log=warn"]
     if a.codec == "prores":
@@ -71,7 +87,8 @@ def remotion_render_cmd(project: Path, comp: str, output: Path, props: Path, a: 
 
 
 def verify(out_probe: Dict[str, Any], timeline: Dict[str, Any], comp: str,
-           frames: Optional[Tuple[int, int]], fast: bool) -> Tuple[bool, List[Dict[str, Any]]]:
+           frames: Optional[Tuple[int, int]], fast: bool,
+           frame: Optional[Dict[str, Any]] = None) -> Tuple[bool, List[Dict[str, Any]]]:
     src = timeline["source"]
     fps = float(src["fps"])
     v = out_probe.get("video") or {}
@@ -81,7 +98,8 @@ def verify(out_probe: Dict[str, Any], timeline: Dict[str, Any], comp: str,
         rows.append({"check": name, "status": "PASS" if ok else "FAIL", "value": value, "expected": expected})
 
     scale = 0.5 if fast else 1.0
-    ew, eh = int(round(src["width"] * scale)), int(round(src["height"] * scale))
+    fw, fh = frame_size(timeline, frame)
+    ew, eh = int(round(fw * scale)), int(round(fh * scale))
     # Remotion rounds odd scaled sizes to even numbers for H.264.
     row("size", abs(int(v.get("width") or 0) - ew) <= 1 and abs(int(v.get("height") or 0) - eh) <= 1,
         f"{v.get('width')}x{v.get('height')}", f"{ew}x{eh}")
@@ -127,25 +145,51 @@ def main() -> None:
     output = output.resolve()
     refuse_existing(output)
 
-    props_path, _ = write_props(project, a.comp, timeline, options)
-    cmd = remotion_render_cmd(project, a.comp, output, props_path, a)
+    if a.overlay:
+        if a.comp == "Jumpcut":
+            die("--overlay cannot do Jumpcut: its cuts and punch-in zooms move the picture itself", "input")
+        if a.aspect not in (None, "source") or a.width is not None or a.fit not in (None, "contain"):
+            die("--overlay draws on the source's own frame: drop --aspect / --width / --fit", "input")
+        if a.fast or a.codec != "h264" or frames:
+            die("--overlay renders the full length at full size to H.264: drop --fast / --codec / --frames", "input")
+        if not timeline["source"].get("has_video"):
+            die("--overlay needs a video source to composite onto", "input")
+
+    props_path, frame, font_note = prepare_props(project, a.comp, timeline, options, a)
+    if font_note:
+        info(font_note)
+    graphics = output.with_name(output.stem + ".graphics.mov") if a.overlay else output
+    cmd = remotion_render_cmd(project, a.comp, graphics, props_path, a)
+    ov_args = [timeline["source"]["path"], "--video", str(graphics), "--position", "0,0", "--margin", "0",
+               "-o", str(output)] + (["--overwrite"] if STATE.overwrite else [])
     if STATE.dry_run:
-        emit({"output": str(output), "commands": [shell_join(cmd)], "props": str(props_path),
-              "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline)},
+        plan = [shell_join(cmd)] + ([shell_join(ffskill_cmd("overlay", ov_args))] if a.overlay else [])
+        emit({"output": str(output), "commands": plan, "props": str(props_path),
+              "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline),
+              "frame": frame, "font": font_note},
              f"would render {a.comp} -> {output}")
         return
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    info(f"rendering {a.comp} with Remotion -> {output}")
+    if a.overlay and graphics.exists():
+        graphics.unlink()
+    info(f"rendering {a.comp} with Remotion -> {graphics}")
     proc = run(cmd, cwd=project)
-    if proc.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
+    if proc.returncode != 0 or not graphics.is_file() or graphics.stat().st_size == 0:
         tail = remotion_error((proc.stderr or "") + "\n" + (proc.stdout or ""))
         die(f"Remotion render failed (exit {proc.returncode}):\n{tail}", "failed", command=shell_join(cmd))
+    commands = [shell_join(cmd)]
+    if a.overlay:
+        info(f"compositing the graphics over the source with ffmpeg-skill overlay.py -> {output}")
+        ov = ffskill("overlay", ov_args)
+        commands.append(ov["_command"])
+        if not a.keep_graphics:
+            graphics.unlink(missing_ok=True)
 
     probe = ffskill("probe", [str(output)])
-    ok, rows = verify(probe, timeline, a.comp, frames, a.fast)
+    ok, rows = verify(probe, timeline, a.comp, frames, a.fast, frame)
     look: Optional[str] = None
-    commands = [shell_join(cmd), probe["_command"]]
+    commands.append(probe["_command"])
     if not a.no_look:
         lk = ffskill("look", [str(output), "--tiles", "3x2"], allow_fail=True)
         if lk.get("status") == "completed":
@@ -156,6 +200,8 @@ def main() -> None:
                f"{v.get('fps')} fps, {'audio' if probe.get('audio') else 'no audio'}")
     result = {"status": "completed" if ok else "failed", "output": str(output), "verified": ok,
               "verification": rows, "commands": commands, "look": look, "summary": summary,
+              "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full",
+              "graphics": str(graphics) if a.overlay and a.keep_graphics else None,
               "kind": None if ok else "failed"}
     table = "\n".join(f"  {r['check']:<9} {r['status']:<4}  {r['value']} (expected {r['expected']})" for r in rows)
     emit(result, summary + "\n" + table + (f"\nLook: {look}" if look else "") +

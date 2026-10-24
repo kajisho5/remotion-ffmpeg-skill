@@ -130,6 +130,44 @@ class Verify(unittest.TestCase):
         self.assertIn("INFO", [r["status"] for r in rows])
 
 
+class OutputFrame(unittest.TestCase):
+    def test_source_shape_is_none(self):
+        self.assertIsNone(_common.output_frame(timeline(), None, None, None))
+        self.assertIsNone(_common.output_frame(timeline(), "source", None, "contain"))
+
+    def test_portrait_keeps_short_side_and_blurs(self):
+        self.assertEqual(_common.output_frame(timeline(), "9:16", None, None),
+                         {"width": 720, "height": 1280, "fit": "blur"})
+
+    def test_explicit_width_and_even_sizes(self):
+        f = _common.output_frame(timeline(), "4:5", 1081, "cover")
+        self.assertEqual((f["width"] % 2, f["height"] % 2), (0, 0))
+        self.assertEqual(f["fit"], "cover")
+        self.assertEqual(_common.output_frame(timeline(), "1:1", None, None)["width"], 720)
+
+    def test_landscape_from_portrait_source(self):
+        t = timeline()
+        t["source"].update(width=1080, height=1920)
+        self.assertEqual(_common.output_frame(t, "16:9", None, None), {"width": 1920, "height": 1080, "fit": "blur"})
+
+    def test_verify_uses_the_output_frame(self):
+        frame = {"width": 720, "height": 1280, "fit": "blur"}
+        probe = {"duration": 8.0, "video": {"width": 720, "height": 1280, "fps": 30.0, "nb_frames": 240},
+                 "audio": {"codec": "aac"}}
+        ok, rows = render.verify(probe, timeline(), "Captioned", None, False, frame)
+        self.assertTrue(ok, rows)
+
+
+class Fonts(unittest.TestCase):
+    def test_caption_script(self):
+        cs = _common.caption_script
+        self.assertEqual(cs([{"text": "これは字幕"}]), "ja")
+        self.assertEqual(cs([{"text": "자막입니다"}]), "ko")
+        self.assertEqual(cs([{"text": "漢字のみ"}]), "ja")
+        self.assertIsNone(cs([{"text": "Plain English"}]))
+        self.assertIsNone(cs([]))
+
+
 class TemplateParity(unittest.TestCase):
     """The TypeScript duration rules must stay the same as expected_frames()."""
 

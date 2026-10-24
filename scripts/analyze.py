@@ -158,7 +158,7 @@ def main() -> None:
     }
     if not video:
         timeline["warnings"].append("audio-only source: width/height/fps default to 1920x1080 at 30 fps; "
-                                    "set options to change the frame.")
+                                    "render with --aspect / --width to choose the frame.")
     for w in timeline["warnings"]:
         info(f"warning: {w}")
 

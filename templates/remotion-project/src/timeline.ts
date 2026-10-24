@@ -38,10 +38,10 @@ export type Options = {
   accent: string;
   textColor: string;
   fontFamily: string;
-  /** Caption font size as a fraction of the frame height. */
+  /** Caption font size as a fraction of the frame's short side. */
   captionSize: number;
-  /** Caption block bottom margin as a fraction of the frame height. */
-  captionMargin: number;
+  /** Caption block bottom margin as a fraction of the frame height; null = 0.08 landscape, 0.2 portrait (clear of Reels/TikTok UI). */
+  captionMargin: number | null;
   /** Jumpcut: zoom applied to every other cut (1 = off). */
   punchIn: number;
   /** PeakPulse: strength of the pulse, 0..1. */
@@ -55,15 +55,43 @@ export const DEFAULT_OPTIONS: Options = {
   textColor: "#ffffff",
   fontFamily: "'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans', 'Helvetica Neue', Arial, sans-serif",
   captionSize: 0.055,
-  captionMargin: 0.08,
+  captionMargin: null,
   punchIn: 1.12,
   pulse: 0.6,
   progressBar: true,
 };
 
-export type Props = { timeline: Timeline; options?: Partial<Options> };
+/**
+ * Output frame, chosen at render time (render.py --aspect / --width / --fit); not a measurement.
+ * Absent = the source's own size. fit: how the source fills a frame of another shape --
+ * contain (bars), cover (crop) or blur (contained over a blurred, cropped copy).
+ */
+export type Fit = "contain" | "cover" | "blur";
+export type Frame = { width: number; height: number; fit: Fit };
+
+/** A font file staged into public/ by render.py (--font-file, or a CJK font found by ffmpeg-skill). */
+export type FontAsset = { src: string; family: string };
+
+export type Props = {
+  timeline: Timeline;
+  options?: Partial<Options>;
+  frame?: Frame | null;
+  font?: FontAsset | null;
+  /**
+   * Graphics only, on a transparent background (render.py --overlay): the source is not drawn and
+   * ffmpeg-skill composites the result over it afterwards -- much faster on long footage.
+   */
+  overlay?: boolean;
+};
 
 export const resolveOptions = (o?: Partial<Options>): Options => ({ ...DEFAULT_OPTIONS, ...(o ?? {}) });
+
+export const outputFrame = (p: Props): Frame =>
+  p.frame ?? { width: p.timeline.source.width, height: p.timeline.source.height, fit: "contain" };
+
+/** Font stack with the staged font (if any) first. */
+export const fontStack = (o: Options, font?: FontAsset | null): string =>
+  font ? `'${font.family}', ${o.fontFamily}` : o.fontFamily;
 
 export const secToFrames = (seconds: number, fps: number): number => Math.round(seconds * fps);
 
