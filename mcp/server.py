@@ -56,7 +56,13 @@ def build_argv(name: str, args: Dict[str, Any]) -> List[str]:
     missing = [k for k in schema["required"] if args.get(k) in (None, "")]
     if missing:
         raise ValueError(f"{name}: missing required argument(s) {missing}")
-    argv: List[str] = [str(args[k]) for k in schema["x-positional"] if args.get(k) is not None]
+    argv: List[str] = []
+    for k in schema["x-positional"]:
+        v = args.get(k)
+        if isinstance(v, list):
+            argv += [str(x) for x in v]
+        elif v is not None:
+            argv.append(str(v))
     flags = dict(s["flags"], dry_run="--dry-run", overwrite="--overwrite", timeout="--timeout")
     for key, val in args.items():
         if key in schema["x-positional"] or val is None or val is False:

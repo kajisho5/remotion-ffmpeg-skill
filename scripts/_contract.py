@@ -111,8 +111,10 @@ def _json_type(action: argparse.Action) -> Dict[str, Any]:
         t = {"type": "string"}
     if action.choices:
         t["enum"] = list(action.choices)
-    if isinstance(action, argparse._AppendAction):
+    if isinstance(action, argparse._AppendAction) or action.nargs in ("+", "*"):
         t = {"type": "array", "items": t}
+        if action.nargs == "+":
+            t["minItems"] = 1
     return t
 
 

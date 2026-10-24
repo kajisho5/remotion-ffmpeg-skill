@@ -39,6 +39,8 @@ class Contract(unittest.TestCase):
         self.assertEqual(props["aspect"]["enum"][0], "source")
         self.assertEqual(props["overlay"]["type"], "boolean")
         self.assertEqual(sorted(render["inputSchema"]["required"]), ["comp", "project", "timeline"])
+        analyze = next(t for t in self.c["tools"] if t["name"] == "analyze")
+        self.assertEqual(analyze["inputSchema"]["properties"]["input"]["type"], "array")
         still = next(t for t in self.c["tools"] if t["name"] == "still")
         self.assertEqual(still["inputSchema"]["properties"]["at"]["type"], "array")
 
@@ -46,6 +48,19 @@ class Contract(unittest.TestCase):
         out = subprocess.run([sys.executable, str(ROOT / "scripts" / "_contract.py"), "--json"],
                              capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(out.stdout)["skill"], "remotion-ffmpeg-skill")
+
+
+class Packaging(unittest.TestCase):
+    def test_versions_agree(self):
+        pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(plugin["version"], pkg["version"])
+        self.assertIn(f"## {pkg['version']}", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
+
+    def test_installer_ships_what_skill_md_needs(self):
+        js = (ROOT / "bin" / "remotion-ffmpeg-skill.js").read_text(encoding="utf-8")
+        for item in ("SKILL.md", "scripts", "templates", "references", "mcp"):
+            self.assertIn(f"'{item}'", js)
 
 
 class Transport(unittest.TestCase):
@@ -61,8 +76,14 @@ class Transport(unittest.TestCase):
     def test_positional_and_repeatable(self):
         argv = server.build_argv("still", {"project": "p", "comp": "Captioned", "timeline": "t", "at": [1.5, 6]})
         self.assertEqual(argv.count("--at"), 2)
-        argv = server.build_argv("analyze", {"input": "a.mp4", "captions": "a.srt"})
+        argv = server.build_argv("analyze", {"input": ["a.mp4"], "captions": "a.srt"})
         self.assertEqual(argv[0], "a.mp4")
+        argv = server.build_argv("analyze", {"input": ["a.mp4", "b.mov"]})
+        self.assertEqual(argv[:2], ["a.mp4", "b.mov"])
+
+    def test_generated_reference_is_current(self):
+        out = subprocess.run([sys.executable, str(ROOT / "scripts" / "_docs.py"), "--check"], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
 
     def test_bad_arguments_are_input_errors(self):
         for args in ({"bogus": 1}, {"comp": "Captioned"}):

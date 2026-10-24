@@ -1,0 +1,30 @@
+{
+  "name": "remotion-ffmpeg-skill",
+  "description": "Motion graphics on real footage for coding agents: ffmpeg-skill measures, Remotion draws (captions, jump cuts, titles, highlights, beat montages), every render is verified frame-for-frame and delivered through ffmpeg-skill templates. Contract + MCP server. Local, no API keys.",
+  "version": "0.3.0",
+  "author": {
+    "name": "kajisho5",
+    "url": "https://github.com/kajisho5"
+  },
+  "homepage": "https://github.com/kajisho5/remotion-ffmpeg-skill",
+  "repository": "https://github.com/kajisho5/remotion-ffmpeg-skill",
+  "license": "MIT",
+  "keywords": [
+    "remotion",
+    "ffmpeg",
+    "ffmpeg-skill",
+    "video",
+    "motion-graphics",
+    "captions",
+    "agent-skill",
+    "agent-skills",
+    "claude-code",
+    "claude-skill",
+    "cursor",
+    "codex",
+    "ai-agents",
+    "mcp",
+    "mcp-server",
+    "motion-graphics"
+  ]
+}

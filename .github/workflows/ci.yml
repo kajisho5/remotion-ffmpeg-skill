@@ -3,27 +3,61 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    name: test (${{ matrix.os }})
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: kajisho5/ffmpeg-skill
-          path: ffmpeg-skill
+          path: _ffmpeg-skill
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Python tests
+
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Unit, contract and media tests (no renders)
         env:
-          FFMPEG_SKILL_DIR: ${{ github.workspace }}/ffmpeg-skill
+          FFMPEG_SKILL_DIR: ${{ github.workspace }}/_ffmpeg-skill
+          PYTHONUTF8: "1"
         run: python -m unittest discover -s tests -v
-      - name: Typecheck the Remotion template
-        working-directory: templates/remotion-project
-        run: npm install --no-audit --no-fund && npx tsc --noEmit
+
+      - name: Remotion project + typecheck
+        run: |
+          python scripts/init.py "$RUNNER_TEMP/rfs-project" --install
+          cd "$RUNNER_TEMP/rfs-project" && npx tsc --noEmit
+
+      - name: Real renders (every composition, portrait, overlay)
+        env:
+          FFMPEG_SKILL_DIR: ${{ github.workspace }}/_ffmpeg-skill
+          RFS_PROJECT: ${{ runner.temp }}/rfs-project
+          PYTHONUTF8: "1"
+        run: python -m unittest tests.test_integration -v
