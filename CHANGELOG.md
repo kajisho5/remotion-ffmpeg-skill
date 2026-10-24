@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-10-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- --sparse for Titled (lower thirds and scene titles)
+
+
 ## 0.6.0 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
