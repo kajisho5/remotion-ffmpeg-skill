@@ -4,11 +4,14 @@ name: release
 #   1. bump "version" in package.json and add a "## X.Y.Z" section to CHANGELOG.md in the same PR
 #   2. merge to main -> this job tags vX.Y.Z, publishes a GitHub Release with that CHANGELOG
 #      section as notes, and publishes to npm (when the NPM_TOKEN secret exists).
-# A push that does not change the version does nothing.
+# A push that does not change the version does nothing -- except publishing to npm when that
+# version is not on npm yet (e.g. the NPM_TOKEN secret was added after the GitHub Release):
+# run this workflow by hand from the Actions tab to publish it.
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release
@@ -62,16 +65,19 @@ jobs:
           gh release create "$V" --title "$V" --notes-file release-notes.md
 
       - uses: actions/setup-node@v4
-        if: steps.v.outputs.release == 'true'
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npm
-        if: steps.v.outputs.release == 'true'
+      - name: Publish to npm (when this version is not on npm yet)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          V="${{ steps.v.outputs.version }}"
+          if npm view "remotion-ffmpeg-skill@$V" version >/dev/null 2>&1; then
+            echo "remotion-ffmpeg-skill@$V is already on npm"
+            exit 0
+          fi
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "::notice::NPM_TOKEN secret is not set: skipped npm publish (GitHub Release was made)"
             exit 0
