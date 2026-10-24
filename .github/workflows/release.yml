@@ -1,9 +1,14 @@
 name: release
 
-# Release whenever package.json's version has no matching tag yet:
-#   1. bump "version" in package.json and add a "## X.Y.Z" section to CHANGELOG.md in the same PR
-#   2. merge to main -> this job tags vX.Y.Z, publishes a GitHub Release with that CHANGELOG
-#      section as notes, and publishes to npm (when the NPM_TOKEN secret exists).
+# Two ways to release, both on a push to main:
+#   - By hand: bump "version" in package.json (and .claude-plugin/plugin.json) and add a
+#     "## X.Y.Z" section to CHANGELOG.md. This job tags vX.Y.Z, publishes a GitHub Release with
+#     that section as notes, and publishes to npm (when the NPM_TOKEN secret exists).
+#   - Automatically: when the version is already tagged, .github/scripts/resolve_version.py reads
+#     what was merged since that tag (PR labels, or feat:/fix: commit subjects for direct pushes)
+#     and, for a minor/patch change, bumps both version files, writes the CHANGELOG section and
+#     pushes that commit ("release: vX.Y.Z [skip ci]") before tagging. Unlabelled changes,
+#     docs/ci/chore only, release nothing; a major change is refused (bump it by hand).
 # A push that does not change the version does nothing -- except publishing to npm when that
 # version is not on npm yet (e.g. the NPM_TOKEN secret was added after the GitHub Release):
 # run this workflow by hand from the Actions tab to publish it.
@@ -19,7 +24,8 @@ concurrency:
 
 permissions:
   contents: write
-  id-token: write   # npm publish --provenance
+  pull-requests: read   # resolve_version.py reads merged PRs' labels
+  id-token: write       # npm publish --provenance
 
 jobs:
   release:
@@ -27,7 +33,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main          # the tip, so an automatic bump commits on top of everything merged
           fetch-depth: 0
+
+      - name: Automatic version bump (when the current version is already tagged)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "v$VERSION not tagged yet: releasing the hand-bumped version"
+            exit 0
+          fi
+          read -r BUMP NEXT < <(python3 .github/scripts/resolve_version.py --notes auto-notes.md)
+          if [ "$BUMP" = "none" ]; then
+            echo "nothing since v$VERSION calls for a release"
+            exit 0
+          fi
+          python3 - "$NEXT" <<'EOF'
+          import datetime, json, sys
+          nxt = sys.argv[1]
+          for path in ("package.json", ".claude-plugin/plugin.json"):
+              data = json.load(open(path, encoding="utf-8"))
+              data["version"] = nxt
+              open(path, "w", encoding="utf-8").write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+          notes = open("auto-notes.md", encoding="utf-8").read()
+          today = datetime.date.today().isoformat()
+          log = open("CHANGELOG.md", encoding="utf-8").read()
+          head = "# Changelog\n"
+          section = f"## {nxt} — {today}\n\n_Automated release: version and notes from what was merged since the previous tag._\n\n{notes}\n"
+          log = log.replace(head, head + "\n" + section, 1) if log.startswith(head) else section + log
+          open("CHANGELOG.md", "w", encoding="utf-8").write(log)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release: v$NEXT [skip ci]"
+          git push origin HEAD:main
 
       - name: Is this version released yet?
         id: v
