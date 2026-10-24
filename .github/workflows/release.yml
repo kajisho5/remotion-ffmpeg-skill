@@ -70,6 +70,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npm (when this version is not on npm yet)
+        shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -82,4 +83,12 @@ jobs:
             echo "::notice::NPM_TOKEN secret is not set: skipped npm publish (GitHub Release was made)"
             exit 0
           fi
-          npm publish --provenance --access public
+          # npm keeps a fresh publish "staged" for a few minutes, during which `npm view` does not see it yet:
+          # a push right after a release then tries the same version again and gets E409. That is not a failure.
+          if ! npm publish --provenance --access public 2>&1 | tee publish.log; then
+            if grep -qiE "previously (staged|published)|cannot publish over" publish.log; then
+              echo "::notice::remotion-ffmpeg-skill@$V is already on npm (staged by an earlier run)"
+              exit 0
+            fi
+            exit 1
+          fi
