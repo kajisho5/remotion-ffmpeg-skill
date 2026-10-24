@@ -69,7 +69,10 @@ def main() -> None:
     lines = [f"{c['status']:4} {c['check']}: {c.get('value')} (expected {c.get('expected')})" for c in checks]
     emit({"status": "completed" if ok else "failed", "output": str(target) if target != src else None,
           "checked": str(target), "platform": a.platform, "verified": ok, "checks": checks,
-          "failed": [c["check"] for c in failed], "warnings": [c["check"] for c in warns], "commands": commands},
+          "failed": [c["check"] for c in failed], "warnings": [c["check"] for c in warns], "commands": commands,
+          "kind": None if ok else "failed",
+          "error": None if ok else ("compliance check failed: " + ", ".join(c["check"] for c in failed)
+                                    if failed else (ck.get("error") or "check.py returned no rows"))},
          "\n".join([f"{target.name}: {'PASS' if ok else 'FAIL'} ({len(failed)} fail, {len(warns)} warn)"] + lines))
     if not ok:
         sys.exit(1)

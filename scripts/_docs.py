@@ -53,6 +53,14 @@ def render() -> str:
             desc = (p.get("description") or "").replace("|", "\\|").replace("\n", " ")
             lines.append(f"| `{arg}` | {typ} | {default} | {desc} |")
         lines.append("")
+        for which, title in (("result", "--json result"), ("dry_run", "--dry-run --json result")):
+            keys = t["output"][which]
+            if keys:
+                lines.append(f"{title} (besides `status`, `dry_run`, `output`): " +
+                             ", ".join(f"`{k}` ({v})" for k, v in keys.items()))
+                lines.append("")
+    lines += ["## Failures", "",
+              "Every failure is one JSON object: " + ", ".join(f"`{k}` ({v})" for k, v in c["output_failure"].items()) + ".", ""]
     return "\n".join(lines)
 
 

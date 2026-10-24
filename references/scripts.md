@@ -35,6 +35,10 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--margin` | number |  | seconds of silence kept around speech (default 0.15) |
 | `--scene-threshold` | number |  | scenes.py --threshold (default 8) |
 
+--json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `verified` (bool), `summary` (object: duration, fps, size, scenes, silences, speech_seconds, peaks, captions, beats, tempo_bpm, highlights, clips, words), `warnings` (list[str])
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
+
 ## init.py
 
 Create a Remotion project with the built-in compositions (optionally npm install).
@@ -49,6 +53,10 @@ Create a Remotion project with the built-in compositions (optionally npm install
 |---|---|---|---|
 | `directory` | string |  | new project folder (must not exist, or be empty) |
 | `--install` | boolean |  | run npm install after copying |
+
+--json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `installed` (bool), `entry` (str), `compositions` (list[str])
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
 
 ## still.py
 
@@ -74,6 +82,10 @@ Render single frames as PNG to check the look before a full render.
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
+
+--json result (besides `status`, `dry_run`, `output`): `outputs` (list[str] (PNG paths)), `frames` (list[int]), `commands` (list[str]), `verified` (bool), `frame` (object|null {width, height, fit}), `font` (str|null)
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `outputs` (list[str]), `frames` (list[int]), `commands` (list[str])
 
 ## render.py
 
@@ -106,6 +118,10 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
+--json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `kind` (null|failed), `error` (null|str (which verification rows failed))
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `props` (str), `expected_frames` (int|null), `frame` (object|null), `font` (str|null)
+
 ## deliver.py
 
 Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance check.
@@ -122,6 +138,10 @@ Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance c
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | ffmpeg-skill delivery template to run |
 | `--output` | string |  | deliverable path (default: <name>_<platform>.mp4) |
 | `--check-only` | boolean |  | run check.py only, write nothing |
+
+--json result (besides `status`, `dry_run`, `output`): `checked` (str), `platform` (str|null), `verified` (bool), `checks` (list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)), `failed` (list[str]), `warnings` (list[str]), `commands` (list[str]), `kind` (null|failed), `error` (null|str)
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
 
 ## pipeline.py
 
@@ -149,6 +169,10 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--fit` | string: blur / contain / cover |  | blur (default when the shape changes), contain or cover |
 | `--font-file` | string |  | caption font file |
 
+--json result (besides `status`, `dry_run`, `output`): `timeline` (str), `render` (str), `deliverable` (str|null), `look` (str|null), `verified` (bool), `warnings` (list[str]), `steps` (list[{step, status, output, command}])
+
+--dry-run --json result (besides `status`, `dry_run`, `output`): `steps` (list[{step, status, output, command}])
+
 ## doctor.py
 
 What this machine can do: Python, Node/npm, ffmpeg-skill, ffmpeg, a project's Remotion install.
@@ -162,3 +186,9 @@ What this machine can do: Python, Node/npm, ffmpeg-skill, ffmpeg, a project's Re
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project` | string |  | Remotion project folder to inspect |
+
+--json result (besides `status`, `dry_run`, `output`): `ok` (bool), `version` (str), `checks` (list[{check, ok, value, fix}]), `ffmpeg_skill_doctor` (object|null)
+
+## Failures
+
+Every failure is one JSON object: `status` (failed), `error` (str), `kind` (input|missing_tool|timeout|failed), `dry_run` (bool).

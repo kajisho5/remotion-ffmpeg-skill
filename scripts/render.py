@@ -214,7 +214,8 @@ def main() -> None:
               "verification": rows, "commands": commands, "look": look, "summary": summary,
               "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full", "look_error": look_error,
               "graphics": str(graphics) if a.overlay and a.keep_graphics else None,
-              "kind": None if ok else "failed"}
+              "kind": None if ok else "failed",
+              "error": None if ok else "verification failed: " + ", ".join(r["check"] for r in rows if r["status"] == "FAIL")}
     table = "\n".join(f"  {r['check']:<9} {r['status']:<4}  {r['value']} (expected {r['expected']})" for r in rows)
     emit(result, summary + "\n" + table + (f"\nLook: {look}" if look else "") +
          ("" if ok else "\nverification FAILED: " + ", ".join(r["check"] for r in rows if r["status"] == "FAIL")))

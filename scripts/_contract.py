@@ -91,6 +91,65 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# What each tool's --json result carries (beyond the shared status / dry_run / output), as
+# key -> short type. "result" is a completed run, "dry_run" a --dry-run plan. tests check real
+# outputs against these, so the contract cannot promise a key a script stopped writing.
+OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
+    "analyze": {
+        "result": {"commands": "list[str]", "verified": "bool", "summary": "object: duration, fps, size, scenes, "
+                   "silences, speech_seconds, peaks, captions, beats, tempo_bpm, highlights, clips, words",
+                   "warnings": "list[str]"},
+        "dry_run": {"commands": "list[str]"},
+    },
+    "init": {
+        "result": {"commands": "list[str]", "installed": "bool", "entry": "str", "compositions": "list[str]"},
+        "dry_run": {"commands": "list[str]"},
+    },
+    "still": {
+        "result": {"outputs": "list[str] (PNG paths)", "frames": "list[int]", "commands": "list[str]",
+                   "verified": "bool", "frame": "object|null {width, height, fit}", "font": "str|null"},
+        "dry_run": {"outputs": "list[str]", "frames": "list[int]", "commands": "list[str]"},
+    },
+    "render": {
+        "result": {"verified": "bool", "verification": "list[{check, status, value, expected}]",
+                   "commands": "list[str]", "look": "str|null (contact sheet PNG)", "look_error": "str|null",
+                   "summary": "str", "frame": "object|null", "font": "str|null", "mode": "full|overlay",
+                   "graphics": "str|null (kept ProRes 4444 layer)", "kind": "null|failed",
+                   "error": "null|str (which verification rows failed)"},
+        "dry_run": {"commands": "list[str]", "props": "str", "expected_frames": "int|null", "frame": "object|null",
+                    "font": "str|null"},
+    },
+    "deliver": {
+        "result": {"checked": "str", "platform": "str|null", "verified": "bool",
+                   "checks": "list[{check, status, value, expected, ...}] (ffmpeg-skill check.py rows)",
+                   "failed": "list[str]", "warnings": "list[str]", "commands": "list[str]",
+                   "kind": "null|failed", "error": "null|str"},
+        "dry_run": {"commands": "list[str]"},
+    },
+    "pipeline": {
+        "result": {"timeline": "str", "render": "str", "deliverable": "str|null", "look": "str|null",
+                   "verified": "bool", "warnings": "list[str]", "steps": "list[{step, status, output, command}]"},
+        "dry_run": {"steps": "list[{step, status, output, command}]"},
+    },
+    "doctor": {
+        "result": {"ok": "bool", "version": "str", "checks": "list[{check, ok, value, fix}]",
+                   "ffmpeg_skill_doctor": "object|null"},
+        "dry_run": {},
+    },
+}
+SHARED_OUTPUT = {"status": "completed|failed", "dry_run": "bool", "output": "str|null (main artifact)"}
+FAILURE_OUTPUT = {"status": "failed", "error": "str", "kind": "input|missing_tool|timeout|failed", "dry_run": "bool"}
+
+
+def missing_output_keys(tool: str, doc: Dict[str, Any]) -> List[str]:
+    """Keys the contract promises for this result that `doc` lacks (empty = conforms)."""
+    if doc.get("status") == "failed":
+        return [k for k in FAILURE_OUTPUT if k not in doc]
+    which = "dry_run" if doc.get("dry_run") else "result"
+    want = list(OUTPUTS[tool][which]) + [k for k in SHARED_OUTPUT if not (tool == "doctor" and k == "output")]
+    return [k for k in want if k not in doc]
+
+
 # Flags every tool takes; the MCP server adds --json itself.
 SHARED = {"json", "dry_run", "overwrite", "timeout", "help"}
 
@@ -170,6 +229,7 @@ def tool_spec(name: str) -> Dict[str, Any]:
         "dry_run": meta["dry_run"],
         "inputSchema": input_schema(parser),
         "flags": flag_for(parser),
+        "output": OUTPUTS[name],
     }
 
 
@@ -182,6 +242,8 @@ def build() -> Dict[str, Any]:
         "depends_on": {"ffmpeg-skill": "https://github.com/kajisho5/ffmpeg-skill", "node": ">=18",
                        "python": ">=3.10"},
         "roles": ROLES,
+        "output_shared": SHARED_OUTPUT,
+        "output_failure": FAILURE_OUTPUT,
         "conventions": {
             "output": "one JSON object on stdout with --json; human lines on stderr",
             "errors": {"input": 2, "missing_tool": 3, "timeout": 4, "failed": 1},

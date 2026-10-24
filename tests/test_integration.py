@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import _common  # noqa: E402
+import _contract  # noqa: E402
 
 HAVE = shutil.which("ffmpeg") and _common.find_ffmpeg_skill() is not None
 PROJECT = os.environ.get("RFS_PROJECT")
@@ -71,6 +72,13 @@ class Analyze(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
+    def test_outputs_match_the_contract(self):
+        self.assertEqual(_contract.missing_output_keys("analyze", self.result), [])
+        code, res = script("analyze", self.src, "-o", self.tmp / "dry.json", "--dry-run")
+        self.assertEqual(_contract.missing_output_keys("analyze", res), [])
+        code, res = script("deliver", self.src, "--check-only", "--platform", "youtube")
+        self.assertEqual(_contract.missing_output_keys("deliver", res), [], res)
+
     def test_measured_source(self):
         s = self.timeline["source"]
         self.assertEqual((s["width"], s["height"], s["fps"]), (1280, 720, 30.0))
@@ -103,6 +111,7 @@ class Analyze(unittest.TestCase):
                            "-o", self.tmp / "j.mp4", "--dry-run")
         self.assertEqual(code, 0, res)
         self.assertEqual(res["expected_frames"], _common.expected_frames("Jumpcut", self.timeline))
+        self.assertEqual(_contract.missing_output_keys("render", res), [])
         self.assertIn("render src/index.ts Jumpcut", res["commands"][0])
 
     def test_overlay_refuses_what_it_cannot_do(self):
@@ -184,6 +193,7 @@ class Analyze(unittest.TestCase):
                                    "-o", self.tmp / f"{comp}.mp4", "--fast")
                 self.assertEqual(code, 0, res)
                 self.assertTrue(res["verified"])
+                self.assertEqual(_contract.missing_output_keys("render", res), [])
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 

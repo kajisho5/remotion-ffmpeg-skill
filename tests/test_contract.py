@@ -50,6 +50,27 @@ class Contract(unittest.TestCase):
         self.assertEqual(json.loads(out.stdout)["skill"], "remotion-ffmpeg-skill")
 
 
+class Outputs(unittest.TestCase):
+    def test_every_tool_declares_result_and_dry_run_shapes(self):
+        for name in _contract.TOOL_META:
+            self.assertEqual(set(_contract.OUTPUTS[name]), {"result", "dry_run"}, name)
+
+    def test_doctor_and_dry_runs_conform(self):
+        def run(*args):
+            p = subprocess.run([sys.executable, *map(str, args), "--json"], capture_output=True, text=True)
+            return json.loads(p.stdout)
+        doc = run(ROOT / "scripts" / "doctor.py")
+        self.assertEqual(_contract.missing_output_keys("doctor", doc), [])
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            doc = run(ROOT / "scripts" / "init.py", Path(d) / "p", "--dry-run")
+            self.assertEqual(_contract.missing_output_keys("init", doc), [])
+            doc = run(ROOT / "scripts" / "render.py", "--project", Path(d) / "nope", "--comp", "Captioned",
+                      "--timeline", Path(d) / "missing.json")
+            self.assertEqual(doc["status"], "failed")
+            self.assertEqual(_contract.missing_output_keys("render", doc), [])
+
+
 class Packaging(unittest.TestCase):
     def test_versions_agree(self):
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
