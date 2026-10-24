@@ -1,4 +1,11 @@
-# remotion-ffmpeg-skill
+<p align="center"><img src="brand/png/icon-512.png" width="128" alt="remotion-ffmpeg-skill icon"></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo/wordmark-white.svg">
+    <img src="brand/logo/wordmark-black.svg" height="40" alt="remotion-ffmpeg-skill">
+  </picture>
+</p>
 
 **ffmpeg-skill measures the footage. Remotion draws from those measurements. ffmpeg-skill checks and delivers the result.**
 

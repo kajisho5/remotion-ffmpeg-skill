@@ -1,0 +1,65 @@
+{
+  "background": "gradient:#3A1C78,#0D0B22",
+  "darkBackground": "gradient:#21114A,#06050F",
+  "groups": [
+    {
+      "name": "Wave",
+      "props": {
+        "translucency": {
+          "enabled": true,
+          "value": 0.15
+        },
+        "blur-material": 0.15,
+        "specular": true,
+        "shadow": {
+          "kind": "neutral",
+          "opacity": 0.45
+        }
+      },
+      "layers": [
+        {
+          "file": "wave.svg",
+          "name": "2 Wave",
+          "props": {
+            "glass": true,
+            "fill": {
+              "linear-gradient": [
+                "#FFB36B",
+                "#FF5FA2"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Frame",
+      "props": {
+        "translucency": {
+          "enabled": true,
+          "value": 0.2
+        },
+        "blur-material": 0.1,
+        "shadow": {
+          "kind": "neutral",
+          "opacity": 0.3
+        }
+      },
+      "layers": [
+        {
+          "file": "frame.svg",
+          "name": "1 Frame",
+          "props": {
+            "glass": true,
+            "fill": {
+              "linear-gradient": [
+                "#FFFFFF",
+                "#C9D4FF"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
