@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # The Remotion template pins every Remotion package to one version (they must match).
+  # Dependabot groups them so a bump moves them together; CI type-checks the template.
+  - package-ecosystem: npm
+    directory: /templates/remotion-project
+    schedule:
+      interval: weekly
+    groups:
+      remotion:
+        patterns: ["remotion", "@remotion/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react"]
