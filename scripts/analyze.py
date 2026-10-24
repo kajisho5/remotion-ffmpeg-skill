@@ -5,12 +5,15 @@ ranges between them, audio peaks, an optional beat grid, and captions from a fil
 
 Every number comes from a measurement (ffmpeg-skill's probe.py / scenes.py / silence.py);
 nothing is guessed. Warnings flag sources Remotion handles badly (variable frame rate, HDR).
+Several inputs are joined first with ffmpeg-skill join.py (size, fps and audio normalised to the
+first clip) and measured as one source; the clip boundaries are kept in the timeline.
 
 Examples:
   python3 analyze.py talk.mp4                              # -> talk.timeline.json
   python3 analyze.py talk.mp4 --captions talk.srt -o tl.json
   python3 analyze.py music.mp4 --beats                     # also measure the beat grid
   python3 analyze.py talk.mp4 --threshold -42 --min-silence 0.8   # quiet room
+  python3 analyze.py intro.mp4 talk.mov outro.mp4 --captions all.srt  # joined, then measured
 """
 import argparse
 import sys
@@ -27,7 +30,11 @@ from _captions import CaptionError, read_captions
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", help="source video (or audio) file")
+    p.add_argument("input", nargs="+", help="source video (or audio) file; several are joined in order first")
+    p.add_argument("--joined", help="with several inputs: where the joined source goes (default: <first>_joined.mp4)")
+    p.add_argument("--join-transition", default="none",
+                   help="with several inputs: ffmpeg-skill join.py --transition (default none = straight cuts)")
+    p.add_argument("--join-duration", type=float, default=0.5, help="transition length in seconds (default 0.5)")
     p.add_argument("-o", "--output", help="timeline file (default: <name>.timeline.json)")
     p.add_argument("--captions", help="SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written)")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
@@ -85,10 +92,13 @@ def warnings_for(probe: Dict[str, Any]) -> List[str]:
 def main() -> None:
     a = build_parser().parse_args()
     apply_common(a)
-    src = Path(a.input).expanduser()
-    if not src.is_file():
-        die(f"input not found: {src}", "input")
-    out = Path(a.output) if a.output else default_output(src, ".timeline", ".json")
+    inputs = [Path(i).expanduser() for i in a.input]
+    missing = [str(i) for i in inputs if not i.is_file()]
+    if missing:
+        die(f"input not found: {', '.join(missing)}", "input")
+    src = inputs[0]
+    joined: Path = Path(a.joined).expanduser() if a.joined else default_output(src, "_joined", ".mp4")
+    out = Path(a.output) if a.output else default_output(joined if len(inputs) > 1 else src, ".timeline", ".json")
     refuse_existing(out)
     skill = require_ffmpeg_skill()
 
@@ -102,21 +112,49 @@ def main() -> None:
         except (CaptionError, ValueError) as e:
             die(f"cannot read {cpath}: {e}", "input")
 
-    plan = [shell_join(ffskill_cmd("probe", [str(src)]))]
+    join_args = [*map(str, inputs), "-o", str(joined), "--transition", a.join_transition,
+                 "--duration", str(a.join_duration)] + (["--overwrite"] if STATE.overwrite else [])
+    plan = ([shell_join(ffskill_cmd("join", join_args))] if len(inputs) > 1 else []) + \
+        [shell_join(ffskill_cmd("probe", [str(joined if len(inputs) > 1 else src)]))]
     if STATE.dry_run:
+        target = str(joined if len(inputs) > 1 else src)
         if not a.no_scenes:
-            plan.append(shell_join(ffskill_cmd("scenes", [str(src), *scene_args(a)])))
+            plan.append(shell_join(ffskill_cmd("scenes", [target, *scene_args(a)])))
         if not a.no_silence:
-            plan.append(shell_join(ffskill_cmd("silence", [str(src), *silence_args(a)])))
+            plan.append(shell_join(ffskill_cmd("silence", [target, *silence_args(a)])))
         emit({"output": str(out), "commands": plan}, f"would write {out} after {len(plan)} ffmpeg-skill steps")
         return
+
+    clips: List[Dict[str, Any]] = []
+    pre_commands: List[str] = []
+    if len(inputs) > 1:
+        refuse_existing(joined)
+        durations = []
+        for f in inputs:
+            pr = ffskill("probe", [str(f)])
+            # The picture's own length: a stream-copied clip's audio can run a few ms past it.
+            durations.append(float((pr.get("video") or {}).get("duration") or pr.get("duration") or 0))
+            pre_commands.append(pr["_command"])
+        info(f"joining {len(inputs)} clips with ffmpeg-skill join.py -> {joined}")
+        jn = ffskill("join", join_args)
+        pre_commands.append(jn["_command"])
+        overlap = a.join_duration if a.join_transition != "none" else 0.0
+        t = 0.0
+        for i, (f, d) in enumerate(zip(inputs, durations)):
+            start = max(0.0, t - (overlap if i > 0 else 0.0))
+            clips.append({"name": f.name, "path": str(f.resolve()), "start": round(start, 3), "end": round(start + d, 3)})
+            t = start + d
+        src = joined
 
     probe = ffskill("probe", [str(src)])
     video, audio = probe.get("video"), probe.get("audio")
     duration = float(probe.get("duration") or (video or {}).get("duration") or (audio or {}).get("duration") or 0)
     if duration <= 0:
         die(f"{src} has no measurable duration", "input")
-    commands = [probe["_command"]]
+    commands = pre_commands + [probe["_command"]]
+    if clips:
+        # The last boundary is the measured joined duration (encoders can round the tail by a frame).
+        clips[-1]["end"] = round(duration, 3)
 
     scenes: List[Dict[str, float]] = [{"start": 0.0, "end": round(duration, 3)}]
     peaks: List[Dict[str, float]] = []
@@ -171,6 +209,7 @@ def main() -> None:
         "peaks": peaks,
         "beats": beats,
         "highlights": highlights,
+        "clips": clips,
         "captions": captions,
         "warnings": warnings_for(probe),
     }
@@ -190,7 +229,8 @@ def main() -> None:
                       "scenes": len(scenes), "silences": len(silences),
                       "speech_seconds": round(speech_total, 3), "peaks": len(peaks),
                       "captions": len(captions), "beats": bool(beats and beats.get("usable")),
-                      "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights)},
+                      "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
+                      "clips": len(clips) or 1},
           "warnings": timeline["warnings"]},
          f"wrote {out}: {timeline['source']['duration']}s, {len(scenes)} scenes, {len(silences)} silences "
          f"(speech {speech_total:.2f}s), {len(peaks)} peaks, {len(captions)} captions")

@@ -44,6 +44,7 @@ Everything in one go: `pipeline.py SOURCE --project ./motion --comp NAME [--capt
 | "Japanese captions" / a specific font | nothing extra for CJK (auto font); `--font-file` for a chosen font |
 | "give me the graphics as a separate layer" | `render.py --overlay --keep-graphics` |
 | "change colour / font / caption size / zoom" | an `--options` JSON (`references/timeline.md`), re-render |
+| several clips ("intro + talk + outro") | `analyze.py A.mp4 B.mov C.mp4` (or `pipeline.py` with several inputs): ffmpeg-skill join.py normalises and joins them, then everything is measured on the joined file |
 | "preview" / "show me a frame" | `still.py` |
 | a new kind of graphic | add a composition to `src/` of the project that reads `Props` from `src/timeline.ts`; render with `--comp YourId` (render.py then reports measured numbers without a built-in expectation) |
 | plain cut / trim / resize / loudness with no graphics | not this skill: use ffmpeg-skill directly |

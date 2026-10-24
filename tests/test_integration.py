@@ -121,6 +121,20 @@ class Analyze(unittest.TestCase):
         self.assertIn("prores-profile=4444", res["commands"][0])
         self.assertIn("overlay.py", res["commands"][1])
 
+    def test_several_inputs_are_joined_then_measured(self):
+        b = self.tmp / "b.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=2",
+                        "-f", "lavfi", "-i", "sine=f=500:d=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                        "-shortest", str(b)], check=True)
+        tl = self.tmp / "joined.timeline.json"
+        code, res = script("analyze", self.src, b, "-o", tl, "--joined", self.tmp / "joined.mp4")
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual([c["name"] for c in t["clips"]], ["fixture.mp4", "b.mp4"])
+        self.assertAlmostEqual(t["clips"][1]["start"], 8.0, delta=0.1)
+        self.assertEqual((t["source"]["width"], t["source"]["fps"]), (1280, 30.0))  # normalised to the first clip
+        self.assertAlmostEqual(t["source"]["duration"], 10.0, delta=0.15)
+
     def test_platform_aspect_comes_from_ffmpeg_skill_templates(self):
         self.assertEqual(_common.platform_aspect("reels"), "9:16")
         self.assertEqual(_common.platform_aspect("youtube"), "16:9")

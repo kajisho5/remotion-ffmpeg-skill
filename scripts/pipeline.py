@@ -24,7 +24,7 @@ from deliver import PLATFORMS
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", help="source video")
+    p.add_argument("input", nargs="+", help="source video; several are joined in order (ffmpeg-skill join.py) first")
     p.add_argument("--project", required=True, help="Remotion project folder made by init.py")
     p.add_argument("--comp", required=True, help=f"composition id ({', '.join(BUILTIN_COMPOSITIONS)}, or yours)")
     p.add_argument("--captions", help="SRT / WebVTT / JSON cues for the timeline")
@@ -65,17 +65,21 @@ def step(name: str, script: str, args: List[str], steps: List[Dict[str, Any]]) -
 def main() -> None:
     a = build_parser().parse_args()
     apply_common(a)
-    src = Path(a.input).expanduser()
-    if not src.is_file():
-        die(f"input not found: {src}", "input")
+    inputs = [Path(i).expanduser() for i in a.input]
+    missing = [str(i) for i in inputs if not i.is_file()]
+    if missing:
+        die(f"input not found: {', '.join(missing)}", "input")
+    src = inputs[0]
     out_dir = Path(a.out_dir).expanduser() if a.out_dir else src.parent
     if not STATE.dry_run:
         out_dir.mkdir(parents=True, exist_ok=True)
-    tl = out_dir / f"{src.stem}.timeline.json"
-    render_out = out_dir / f"{src.stem}_{a.comp}.mp4"
+    stem = src.stem + ("_joined" if len(inputs) > 1 else "")
+    tl = out_dir / f"{stem}.timeline.json"
+    render_out = out_dir / f"{stem}_{a.comp}.mp4"
     steps: List[Dict[str, Any]] = []
 
-    an_args = [str(src), "-o", str(tl)] + (["--captions", a.captions] if a.captions else []) + (["--beats"] if a.beats else [])
+    an_args = [*map(str, inputs), "-o", str(tl)] + (["--joined", str(out_dir / f"{stem}.mp4")] if len(inputs) > 1 else [])
+    an_args += (["--captions", a.captions] if a.captions else []) + (["--beats"] if a.beats else [])
     analysis = step("measure", "analyze", an_args, steps)
     if STATE.dry_run and not tl.exists():
         emit({"output": None, "steps": steps,

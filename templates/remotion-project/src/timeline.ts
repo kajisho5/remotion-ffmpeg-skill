@@ -34,6 +34,8 @@ export type Timeline = {
   peaks: Peak[];
   beats?: Beats | null;
   highlights?: Highlight[];
+  /** Several inputs joined by ffmpeg-skill: where each clip sits on the joined timeline. */
+  clips?: { name: string; start: number; end: number }[];
   captions: Caption[];
   warnings?: string[];
 };

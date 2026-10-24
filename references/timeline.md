@@ -23,7 +23,8 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `peaks` | `[{time, rms}]` | scenes.py | audio energy peaks |
 | `beats` | object \| null | scenes.py `--beats` | `{times, tempo_bpm, confidence, usable}`; compositions use the times only when `usable` |
 | `highlights` | `[{start, end}]` | scenes.py `--highlights` | ranked by audio energy, stored in source order (analyze.py `--highlights N [--target S]`) |
-| `captions` | `[{start, end, text}]` | your SRT / VTT / JSON | text exactly as written |
+| `clips` | `[{name, path, start, end}]` | analyze.py with several inputs | where each input sits after ffmpeg-skill join.py joined them (empty for one input) |
+| `captions` | `[{start, end, text}]` | your SRT / VTT / JSON | text exactly as written, timed on the (joined) source |
 | `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
 
 All times are seconds on the source timeline. Frames are `Math.round(seconds * fps)` (round
