@@ -89,6 +89,23 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
     elif t == "reply_mentions":
         hit = [s for s in c["any"] if s.lower() in reply.lower()]
         ok, detail = bool(hit), f"found {hit}" if hit else f"none of {c['any']}"
+    elif t == "options_file":
+        # an --options JSON the agent wrote: has the asked-for keys and passes the skill's own check
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        from _common import validate_options
+        tried = []
+        for f in files(work, c.get("glob", "*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except ValueError:
+                continue
+            if not isinstance(data, dict) or "schema" in data or not all(k in data for k in c["keys"]):
+                continue
+            problems = validate_options(data)
+            tried.append(f"{f.name}: {'valid' if not problems else '; '.join(problems)}")
+            if not problems:
+                return {"check": c, "ok": True, "detail": tried[-1]}
+        ok, detail = False, ("; ".join(tried) if tried else f"no options file with {c['keys']}")
     elif t == "any_of":
         # Several valid routes (e.g. this skill's timeline, or ffmpeg-skill alone with the trade-off stated).
         tried = []

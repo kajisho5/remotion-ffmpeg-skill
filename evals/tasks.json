@@ -353,6 +353,61 @@
         }
       ],
       "note": "Either only the captioned stretches are drawn (--sparse) or no browser render at all."
+    },
+    {
+      "id": "caption-look-options",
+      "prompt": "Put animated captions from talk.srt on talk.mp4, with a red accent and captions a bit bigger than the default.",
+      "checks": [
+        {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1280,
+          "height": 720
+        },
+        {
+          "type": "any_of",
+          "routes": [
+            {
+              "name": "remotion-ffmpeg-skill",
+              "checks": [
+                {
+                  "type": "file",
+                  "glob": "*.timeline.json",
+                  "captions": 2
+                },
+                {
+                  "type": "options_file",
+                  "keys": [
+                    "accent",
+                    "captionSize"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "ffmpeg-skill alone",
+              "checks": [
+                {
+                  "type": "no_dir",
+                  "glob": "*/src/index.ts"
+                },
+                {
+                  "type": "reply_mentions",
+                  "any": [
+                    "red",
+                    "赤"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        }
+      ],
+      "note": "The look comes from an options file with real keys (a typo is refused by render.py; the agent must fix it, not drop it)."
     }
   ]
 }
