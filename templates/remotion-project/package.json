@@ -1,0 +1,20 @@
+{
+  "name": "remotion-ffmpeg-project",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Remotion project scaffolded by remotion-ffmpeg-skill (init.py). Compositions read a timeline.json measured by ffmpeg-skill.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.538",
+    "remotion": "4.0.538",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

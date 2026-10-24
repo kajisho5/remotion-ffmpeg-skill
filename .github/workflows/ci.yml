@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: kajisho5/ffmpeg-skill
+          path: ffmpeg-skill
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Python tests
+        env:
+          FFMPEG_SKILL_DIR: ${{ github.workspace }}/ffmpeg-skill
+        run: python -m unittest discover -s tests -v
+      - name: Typecheck the Remotion template
+        working-directory: templates/remotion-project
+        run: npm install --no-audit --no-fund && npx tsc --noEmit
