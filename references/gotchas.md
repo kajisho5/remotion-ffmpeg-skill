@@ -25,5 +25,6 @@ Read the one you need; SKILL.md has the one-line versions.
 - **An options typo used to do nothing.** Unknown keys and wrong types are refused before rendering.
 
 ## Containers and CI
+- **Homebrew's `ffmpeg` has no `drawtext`.** ffmpeg-skill's contact sheets fail on it (the render itself still verifies). `brew install ffmpeg-full` (keg-only: put its `bin` on PATH). render.py says so in `look_error`.
 - **`remotion` packages must share one version.** The template pins them; Dependabot groups them.
 - **Container memory warnings** ("Detected differing memory amounts") are noise in Docker; error extraction drops them and keeps what follows "An error occurred".

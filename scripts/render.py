@@ -203,6 +203,9 @@ def main() -> None:
             commands.append(lk.get("_command", ""))
         else:
             look_error = f"{lk.get('kind') or 'failed'}: {str(lk.get('error') or '')[-400:]}"
+            if "drawtext" in look_error:
+                look_error += (" -- this FFmpeg build has no drawtext filter. macOS Homebrew: `brew install ffmpeg-full` "
+                               "(the plain ffmpeg formula dropped it); use still.py frames to look meanwhile")
             info(f"warning: contact sheet failed ({look_error}); view the render itself")
     v = probe.get("video") or {}
     summary = (f"{output.name}: {float(probe.get('duration') or 0):.2f} s, {v.get('width')}x{v.get('height')}, "
