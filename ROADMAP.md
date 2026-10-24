@@ -12,9 +12,10 @@ Status: ✅ done · 🔜 next · 💡 idea. Order inside a section is priority o
 - ✅ Transparent graphics layer (`--overlay --keep-graphics`)
 - ✅ Several inputs joined by ffmpeg-skill before measuring
 - ✅ Machine-readable contract + MCP server
+- ✅ Agent evals (6 tasks, grader, first run 6/6)
 
 ## Next
-- 🔜 Agent evals: request → expected tool calls and verified outputs, graded automatically
+- 🔜 More eval tasks (overlay layer, several inputs, options typos) and repeated runs
 - 🔜 Render only the captioned ranges for long footage (segment renders composited by ffmpeg-skill)
 - 🔜 macOS and Windows runs in CI
 - 🔜 Word-level karaoke captions from timed words (ffmpeg-skill transcription word timings)

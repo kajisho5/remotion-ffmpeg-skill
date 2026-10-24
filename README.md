@@ -108,6 +108,10 @@ This skill is MIT. **Remotion itself has its own licence**: free for individuals
 
 Remotion renders in a headless browser. Measured on a 2-core Linux machine: a 30 s 1080p30 render takes about 170 s (≈ 5–6× the clip length). Check with `still.py` and `--fast` before a full render of long footage; more CPU cores help (`--concurrency`).
 
+## Agent evals
+
+Six plain requests ("captions for YouTube", a Japanese Reels jump cut, "cut to the beat", a lower third without a name, a plain trim that is *not* this skill's job, a square highlight reel), run by an agent that only has the skill files, graded on what it leaves behind: **6 / 6** on the first run ([results](evals/results/2026-10-24.md), [how to run](evals/README.md)).
+
 ## Status
 
-0.2.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Planned: agent evals, multi-clip sources, rendering only the captioned ranges for long footage.
+0.3.0. Tested on Linux (Node 22, Remotion 4.0.538, ffmpeg-skill 2.12.0); macOS and Windows not yet. Next: rendering only the captioned ranges for long footage, macOS/Windows CI, word-level karaoke captions ([roadmap](ROADMAP.md)).
