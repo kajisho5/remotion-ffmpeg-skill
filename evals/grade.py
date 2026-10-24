@@ -86,7 +86,8 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
         hashes = json.loads((work / FIXTURE_HASHES_FILE).read_text()) if (work / FIXTURE_HASHES_FILE).exists() else {}
         f = work / c["file"]
         now = hashlib.sha1(f.read_bytes()).hexdigest() if f.exists() else None
-        ok, detail = now is not None and hashes.get(c["file"]) in (None, now), "unchanged" if ok else "changed or missing"
+        ok = now is not None and hashes.get(c["file"]) in (None, now)
+        detail = ("unchanged" if c["file"] in hashes else "present (no recorded hash)") if ok else "changed or missing"
     else:
         detail = f"unknown check type {t}"
     return {"check": c, "ok": ok, "detail": detail}
