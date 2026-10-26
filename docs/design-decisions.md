@@ -8,7 +8,7 @@ Report one as a defect only if its reason no longer holds.
 | No script runs `ffmpeg` / `ffprobe` itself; everything goes through ffmpeg-skill | one place for FFmpeg guarantees (originals untouched, measured plans, typed errors) | `TOOL_META[*].ffmpeg_skill`; code review |
 | A render that does not match its timeline exits non-zero even though a file was written | an unverified file is not a deliverable; the agent must report the failed rows | `test_unit.Verify` |
 | Frame counts use round-half-up in Python | the TypeScript compositions use `Math.round`; both must agree to the frame | `test_unit.Frames.test_round_half_up_like_javascript`, `TemplateParity` |
-| Caption, title and lower-third text is never generated or shortened | words belong to the user; the skill only places them | `test_unit.Captions.test_text_is_never_rewritten`, eval `lower-third-asks-for-text` |
+| Caption, title and lower-third text is never generated or shortened | words belong to the user; the skill only places them | `test_unit.Captions.test_text_is_never_rewritten` and the agent task `lower-third-asks-for-text` in `evals/tasks.json` |
 | `--overlay` refuses Jumpcut / Highlights / BeatMontage | their cuts move the picture itself; a transparent layer cannot express that | `test_integration.Analyze.test_overlay_refuses_what_it_cannot_do` |
 | `--overlay` is kept although it is not faster | it produces a ProRes 4444 graphics layer for editing apps | `references/gotchas.md` |
 | Sources are hard-linked or copied, never symlinked | Remotion's server 404s on outside symlinks | `references/gotchas.md` |
