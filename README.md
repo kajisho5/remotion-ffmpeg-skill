@@ -1,4 +1,4 @@
-<p align="center"><img src="brand/png/icon-512.png" width="128" alt="remotion-ffmpeg-skill icon"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kajisho5/remotion-ffmpeg-skill/media/brand/png/icon-512.png" width="128" alt="remotion-ffmpeg-skill icon"></p>
 
 <p align="center">
   <picture>
