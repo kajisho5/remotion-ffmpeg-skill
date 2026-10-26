@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1 — 2026-10-26
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- plugin installs on claude.ai -- installer moves from bin/ to cli/; listing name and links
+
+
 ## 0.10.0 — 2026-10-24
 
 _Automated release: version and notes from what was merged since the previous tag._
