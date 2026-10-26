@@ -28,10 +28,10 @@
     "url": "https://github.com/kajisho5/remotion-ffmpeg-skill/issues"
   },
   "bin": {
-    "remotion-ffmpeg-skill": "bin/remotion-ffmpeg-skill.js"
+    "remotion-ffmpeg-skill": "cli/remotion-ffmpeg-skill.js"
   },
   "files": [
-    "bin",
+    "cli",
     "SKILL.md",
     "scripts",
     "templates",

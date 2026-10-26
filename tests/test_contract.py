@@ -79,7 +79,7 @@ class Packaging(unittest.TestCase):
         self.assertIn(f"## {pkg['version']}", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
 
     def test_installer_ships_what_skill_md_needs(self):
-        js = (ROOT / "bin" / "remotion-ffmpeg-skill.js").read_text(encoding="utf-8")
+        js = (ROOT / "cli" / "remotion-ffmpeg-skill.js").read_text(encoding="utf-8")
         for item in ("SKILL.md", "scripts", "templates", "references", "mcp"):
             self.assertIn(f"'{item}'", js)
 
