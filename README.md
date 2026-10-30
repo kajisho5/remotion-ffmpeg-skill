@@ -58,6 +58,7 @@ npx remotion-ffmpeg-skill     # this skill, next to it in ~/.claude/skills
 - "Cut the silences out of this recording, jump-cut style, and keep the subtitles in sync."
 - "Make graphics that hit on the loud moments of `clip.mp4`, as a Reel."
 - "Here are my chapters (`0:00 Intro` …): put them on screen and make it a YouTube upload." — a card at each chapter start, chapter markers in the file, and the description block to paste.
+- "Caption `talk.mp4` from the transcript transcription-skill made, words lighting up as they're spoken." — `analyze.py --words talk.transcript.json`; the transcript's schema version is checked and its times are used exactly as written.
 - "Japanese captions, vertical, for TikTok." — renders 9:16 with a blurred fill, stages a CJK font automatically, breaks lines between phrases.
 
 ## Under the hood

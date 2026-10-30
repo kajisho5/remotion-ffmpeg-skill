@@ -72,6 +72,93 @@ class Words(unittest.TestCase):
             _captions.parse_words('{"segments": [{"text": "no word timestamps"}]}')
 
 
+class Transcript(unittest.TestCase):
+    """--words with a transcription-skill transcript (tests/fixtures/transcript.json)."""
+
+    def setUp(self):
+        import json
+        self.json = json
+        self.doc = json.loads((ROOT / "tests" / "fixtures" / "transcript.json").read_text(encoding="utf-8"))
+
+    def test_fixture_is_valid_and_read_as_transcript(self):
+        self.assertEqual(_captions.validate_transcript(self.doc), [])
+        r = _captions.read_word_timings(ROOT / "tests" / "fixtures" / "transcript.json")
+        self.assertIsNotNone(r["cues"])
+
+    def test_times_are_never_invented(self):
+        r = _captions.parse_transcript(self.doc)
+        given = {(w["start"], w["end"]) for seg in self.doc["segments"] for w in seg["words"] or []}
+        self.assertEqual({(w["start"], w["end"]) for w in r["words"]}, given)
+        bounds = {t for seg in self.doc["segments"] for t in (seg["start"], seg["end"])} | {t for p in given for t in p}
+        for c in r["cues"]:
+            self.assertIn(c["start"], bounds)
+            self.assertIn(c["end"], bounds)
+
+    def test_japanese_without_spaces_and_english_spacing_from_raw_text(self):
+        r = _captions.parse_transcript(self.doc)
+        self.assertEqual("".join(w["text"] for w in r["words"][:6]), "本日の講演を始めます。")
+        self.assertEqual([w["text"] for w in r["words"][6:8]], [" Welcome", " to"])
+        # cues joined back give each segment's text exactly: nothing added, dropped or reworded
+        self.assertEqual([c["text"] for c in r["cues"]][:2], [s["text"] for s in self.doc["segments"][:2]])
+        self.assertEqual(" ".join(c["text"] for c in r["cues"][2:]), self.doc["segments"][2]["text"])
+
+    def test_segment_without_word_timings_is_one_plain_cue(self):
+        r = _captions.parse_transcript(self.doc)
+        self.assertIn({"start": 3.2, "end": 4.5, "text": "Inside the silence."}, r["cues"])
+        self.assertFalse(any(3.2 <= w["start"] < 4.5 for w in r["words"]))
+
+    def test_words_that_do_not_spell_the_text_are_not_trusted(self):
+        self.doc["segments"][0]["words"][2]["text"] = "公園"
+        r = _captions.parse_transcript(self.doc)
+        self.assertEqual(r["cues"][0], {"start": 0.3, "end": 2.8, "text": "本日の講演を始めます。"})
+        self.assertFalse(any(w["start"] < 2.8 for w in r["words"]))
+        self.assertTrue(any("do not spell" in w for w in r["warnings"]))
+
+    def test_unknown_versions_are_refused(self):
+        for schema in ("transcription-skill/transcript/0.2", "transcription-skill/transcript/1.0",
+                       "transcription-skill/speech-event/0.1", "something/else", None):
+            with self.subTest(schema=schema):
+                with self.assertRaisesRegex(_captions.CaptionError, "unsupported transcript schema"):
+                    _captions.parse_transcript(dict(self.doc, schema=schema))
+
+    def test_contract_violations_are_refused(self):
+        def broken(fn):
+            doc = self.json.loads(self.json.dumps(self.doc))
+            fn(doc)
+            return doc
+        cases = {
+            "missing field": lambda d: d.pop("source"),
+            "word missing confidence": lambda d: d["segments"][0]["words"][0].pop("confidence"),
+            "backwards word": lambda d: d["segments"][0]["words"][1].update(start=0.9, end=0.8),
+            "word outside segment": lambda d: d["segments"][0]["words"][-1].update(end=3.0),
+            "overlapping segments": lambda d: d["segments"][1].update(start=2.0),
+            "segment past the end": lambda d: d["segments"][2].update(end=9.0),
+            "NaN time": lambda d: d["segments"][0].update(start=float("nan")),
+            "bool time": lambda d: d["segments"][0]["words"][0].update(start=True),
+            "confidence > 1": lambda d: d["segments"][0].update(confidence=1.5),
+            "bad fingerprint": lambda d: d["source"].update(fingerprint="md5:00"),
+            "duration mismatch": lambda d: d["source"].update(media_duration=9.0),
+            "other producer": lambda d: d["provenance"].update(skill="another-skill"),
+        }
+        for name, fn in cases.items():
+            with self.subTest(name):
+                with self.assertRaises(_captions.CaptionError):
+                    _captions.parse_transcript(broken(fn))
+
+    def test_no_segments_is_an_error(self):
+        with self.assertRaisesRegex(_captions.CaptionError, "no speech"):
+            _captions.parse_transcript(dict(self.doc, segments=[]))
+
+    def test_whisper_json_still_read_as_before(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "whisper.json"
+            f.write_text(Words.WHISPER, encoding="utf-8")
+            r = _captions.read_word_timings(f)
+        self.assertIsNone(r["cues"])   # grouped later, only without --captions -- as before
+        self.assertEqual(r["words"], _captions.parse_words(Words.WHISPER))
+
+
 class Frames(unittest.TestCase):
     def test_round_half_up_like_javascript(self):
         self.assertEqual(_common.sec_to_frames(3.15, 30), 95)   # 94.5 -> 95 (Python round() would give 94)
