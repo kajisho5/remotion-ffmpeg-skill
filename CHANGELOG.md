@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.2 — 2026-10-30
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- contract in the OS registry shape (#8)
+
+
 ## 0.10.1 — 2026-10-26
 
 _Automated release: version and notes from what was merged since the previous tag._
