@@ -11,7 +11,7 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 |---|---|---|---|
 | `schema` | string | — | always `remotion-ffmpeg-skill/timeline@1` |
 | `generator` | object | — | this skill's version and the ffmpeg-skill version that measured |
-| `source.path` | string | analyze.py | absolute path of the measured file |
+| `source.path` | string | analyze.py | absolute path of the measured file (the conformed copy after `--conform`) |
 | `source.src` | string \| null | render.py | `staticFile()` path inside `public/` (added at render time) |
 | `source.duration` | seconds | probe.py | container duration |
 | `source.fps` | number | probe.py | composition fps = source fps |
@@ -28,7 +28,8 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `chapters` | `[{start, end, title}]` | `--chapters FILE` (`TIME TITLE` per line, YouTube's format) or `--chapters source` (the file's own markers) | titles as written; each ends where the next starts. YouTube's rules (first at 0:00, at least three, each ≥ 10 s) become warnings |
 | `pip` | `{path, name, duration, width, height, fps, offset, confidence, measured}` or null | `--pip CAMERA` (offset from ffmpeg-skill sync.py over both audio tracks) or `--pip-offset` | offset = seconds after the source's start at which the camera's first frame belongs (negative: the camera started first) |
 | `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
-| `warnings` | `[string]` | analyze.py | VFR, HDR, rotation, odd frame rate |
+| `conform` | object \| null | analyze.py `--conform` | provenance when the source was VFR or HDR: `reasons` (`vfr`, `hdr`), `original` (path, name, sha256 fingerprint, duration, frame rates, colour tags), `output` (= `source.path`), `steps` (`{reason, tool, args, command, notes}` per ffmpeg-skill call: `fit.py --fps`, then `color.py --to-sdr`), `measured` (ffmpeg-skill probe of the copy: CFR, BT.709). `pip.conform` is the same for a conformed camera. null = the source was drawn on as it is |
+| `warnings` | `[string]` | analyze.py | rotation, odd frame rate, chapters, transcript (VFR and HDR are never warnings: conformed or refused) |
 
 All times are seconds on the source timeline. Frames are `Math.round(seconds * fps)` (round
 half up) in both TypeScript and Python, so render.py's expected frame count matches the

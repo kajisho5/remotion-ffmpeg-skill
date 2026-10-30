@@ -11,9 +11,9 @@ Exit codes: input = 2, missing_tool = 3, timeout = 4, failed = 1.
 Measure a source with ffmpeg-skill and write timeline.json (+ captions from a file).
 
 - Role: analysis — measures media and writes a data file (no media)
-- Writes: timeline.json
-- Verifies: every number comes from ffmpeg-skill probe/scenes/silence; warnings for VFR/HDR/rotation
-- ffmpeg-skill: probe, scenes, silence
+- Writes: timeline.json (+ the joined source for several inputs, the conformed copy with --conform)
+- Verifies: every number comes from ffmpeg-skill probe/scenes/silence; a VFR or HDR source is refused, or with --conform conformed and re-measured (CFR at the asked rate, SDR BT.709) before use; warnings for rotation and odd frame rates
+- ffmpeg-skill: probe, scenes, silence, join (several inputs), sync (--pip), fit (--conform: VFR -> CFR), color (--conform: HDR -> SDR)
 - `--dry-run`: plans without writing
 
 | Argument | Type | Default | Meaning |
@@ -29,6 +29,9 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--pip` | string |  | a second recording (camera) for the Pip composition: picture-in-picture over the source. The offset between the two is measured from their audio with ffmpeg-skill sync.py |
 | `--pip-offset` | number |  | with --pip: the camera starts this many seconds after the source (negative: before), instead of measuring it -- for a camera without usable audio |
 | `--pip-max-offset` | number | `30.0` | with --pip: largest offset sync.py searches, in seconds (default 30) |
+| `--conform` | boolean |  | a variable-frame-rate or HDR / BT.2020 source (or --pip camera) is first made into a constant-frame-rate, SDR BT.709 copy with ffmpeg-skill (fit.py --fps, color.py --to-sdr: tone-mapped, so the look changes) and everything is measured and drawn on that copy; the original is never modified. Without it such a source is refused |
+| `--conformed` | string |  | with --conform: where the conformed copy of the source goes (default: <name>_conformed.mp4) |
+| `--conform-fps` | number |  | with --conform: the constant frame rate for a VFR source (default: the stream's base rate, r_frame_rate, so no frame is dropped) |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
@@ -39,7 +42,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--margin` | number |  | seconds of silence kept around speech (default 0.15) |
 | `--scene-threshold` | number |  | scenes.py --threshold (default 8) |
 
---json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `verified` (bool), `summary` (object: duration, fps, size, scenes, silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words), `warnings` (list[str])
+--json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `verified` (bool), `summary` (object: duration, fps, size, scenes, silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words, conformed (list: vfr / hdr)), `warnings` (list[str])
 
 --dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str])
 
@@ -161,7 +164,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 - Role: orchestration — runs other tools in order, each verified before the next
 - Writes: timeline.json, render, deliverable
 - Verifies: each step's own verification
-- ffmpeg-skill: probe, scenes, silence, look, render --template, check
+- ffmpeg-skill: probe, scenes, silence, fit (--conform), color (--conform), look, render --template, check
 - `--dry-run`: plans without writing
 
 | Argument | Type | Default | Meaning |
@@ -176,6 +179,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |
 | `--out-dir` | string |  | where the timeline, render and deliverable go (default: next to the input) |
 | `--beats` | boolean |  | measure the beat grid too |
+| `--conform` | boolean |  | a variable-frame-rate or HDR source is made into a constant-frame-rate, SDR BT.709 copy with ffmpeg-skill first (analyze.py --conform; the copy goes in --out-dir) and drawn on; without it such a source is refused |
 | `--fast` | boolean |  | preview-quality render |
 | `--aspect` | string: source / 16:9 / 9:16 / 1:1 / 4:5 / 4:3 |  | output shape (default: the shape the --platform template delivers, else the source's) |
 | `--width` | integer |  | output width in px |

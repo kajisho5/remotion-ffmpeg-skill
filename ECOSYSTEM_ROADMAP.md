@@ -17,7 +17,7 @@ v0.10.1. analyze, init, still, render, deliver, pipeline, doctor; compositions B
 
 ## Wiring
 
-Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, sync, check, join, look, metadata, overlay, render.
+Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, sync, check, join, look, metadata, overlay, render, fit and color (`--conform`).
 
 ## Steps
 
@@ -25,7 +25,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
   - Done when: OS schema validation passes
 - [x] **2. Captions from a transcription-skill transcript** — `--words` input ([#9](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/9))
   - Done when: integration fixture
-- [ ] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading
+- [x] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading (PR_LINK)
   - Done when: no warn-only path
 - [ ] **4. (agent side) SkillSpec measured_motion -> pipeline** — CONFIRM
   - Done when: tracked in video-production-agent

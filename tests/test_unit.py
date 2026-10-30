@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import _captions  # noqa: E402
 import _common  # noqa: E402
 import _sparse  # noqa: E402
+import analyze  # noqa: E402
 import render  # noqa: E402
 
 
@@ -492,3 +493,50 @@ class Sparse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Conform(unittest.TestCase):
+    """VFR / HDR sources are conformed (--conform) or refused; nothing only warns."""
+
+    def probe(self, **video):
+        return {"duration": 4.0, "video": {"fps": 30.0, "r_frame_rate": "30/1", "avg_frame_rate": "30/1",
+                                           "variable_frame_rate_suspected": False, "hdr": False,
+                                           "hdr_signal": False, "bt2020_or_hdr": False, **video}}
+
+    def test_what_needs_conforming(self):
+        self.assertEqual(analyze.conform_needs(self.probe()), [])
+        self.assertEqual(analyze.conform_needs(self.probe(variable_frame_rate_suspected=True)), ["vfr"])
+        for tags in ({"hdr": True, "hdr_signal": True, "bt2020_or_hdr": True},   # PQ / HLG / Dolby Vision
+                     {"bt2020_or_hdr": True}):                                    # BT.2020 primaries on SDR
+            self.assertEqual(analyze.conform_needs(self.probe(**tags)), ["hdr"])
+        both = self.probe(variable_frame_rate_suspected=True, hdr=True, bt2020_or_hdr=True)
+        self.assertEqual(analyze.conform_needs(both), ["vfr", "hdr"])
+        self.assertEqual(analyze.conform_needs({"audio": {"codec": "aac"}}), [])   # audio only: nothing to draw
+
+    def test_vfr_or_hdr_is_never_only_a_warning(self):
+        for tags in ({"variable_frame_rate_suspected": True}, {"hdr": True, "bt2020_or_hdr": True}):
+            self.assertEqual(analyze.warnings_for(self.probe(**tags)), [])
+
+    def test_rate_keeps_every_frame(self):
+        vfr = {"r_frame_rate": "30/1", "avg_frame_rate": "280/13", "fps": 21.538}
+        self.assertEqual(analyze.conform_rate(vfr, None), 30.0)          # the base grid, not the average
+        self.assertEqual(analyze.conform_rate(vfr, 25.0), 25.0)          # --conform-fps wins
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": "30000/1001", "fps": 29.9}, None), 29.97)
+        # a timebase-like base rate (screen recorders) is no frame grid: fall back to the average
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": "1000/1", "fps": 29.99}, None), 30.0)
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": None, "fps": None}, None), 30.0)
+
+    def test_plan_order_and_outputs(self):
+        src, out, tmp = Path("/m/a.mov"), Path("/m/a_conformed.mp4"), Path("/m/.t/cfr.mp4")
+        v = {"r_frame_rate": "30/1"}
+        self.assertEqual(analyze.conform_plan(src, v, ["vfr"], out, tmp, None),
+                         [("vfr", "fit", [str(src), "--fps", "30", "-o", str(out)])])
+        self.assertEqual(analyze.conform_plan(src, v, ["hdr"], out, tmp, None),
+                         [("hdr", "color", [str(src), "--to-sdr", "-o", str(out)])])
+        # VFR first (color.py would otherwise conform to the average rate itself), then one tone map
+        self.assertEqual(analyze.conform_plan(src, v, ["vfr", "hdr"], out, tmp, 24.0),
+                         [("vfr", "fit", [str(src), "--fps", "24", "-o", str(tmp)]),
+                          ("hdr", "color", [str(tmp), "--to-sdr", "-o", str(out)])])
+        for _, _, args in analyze.conform_plan(src, v, ["vfr", "hdr"], out, tmp, None):
+            self.assertNotEqual(args[0], str(out))   # the original is only ever read
+
