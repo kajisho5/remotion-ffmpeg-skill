@@ -143,7 +143,7 @@ class Analyze(unittest.TestCase):
         code, res = script("analyze", self.src, "--words", TRANSCRIPT, "-o", tl, "--no-scenes")
         self.assertEqual(code, 0, res)
         code, res = script("render", "--project", PROJECT, "--comp", "Karaoke", "--timeline", tl,
-                           "-o", self.tmp / "tr_karaoke.mp4", "--fast")
+                           "-o", self.tmp / "real_transcript_karaoke.mp4", "--fast")
         self.assertEqual(code, 0, res)
         self.assertTrue(res["verified"])
 
