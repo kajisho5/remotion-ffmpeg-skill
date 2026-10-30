@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0 — 2026-10-30
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- captions from a transcription-skill transcript (--words) (#9)
+
+
 ## 0.10.2 — 2026-10-30
 
 _Automated release: version and notes from what was merged since the previous tag._

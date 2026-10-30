@@ -2,7 +2,7 @@
   "name": "remotion-ffmpeg-skill",
   "displayName": "remotion-ffmpeg-skill",
   "description": "Motion graphics on real footage for coding agents: ffmpeg-skill measures, Remotion draws (captions, jump cuts, titles, highlights, beat montages), every render is verified frame-for-frame and delivered through ffmpeg-skill templates. Contract + MCP server. Local, no API keys.",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "author": {
     "name": "kajisho5",
     "url": "https://github.com/kajisho5"
