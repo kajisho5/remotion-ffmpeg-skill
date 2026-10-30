@@ -18,6 +18,22 @@ import _contract  # noqa: E402
 
 HAVE = shutil.which("ffmpeg") and _common.find_ffmpeg_skill() is not None
 PROJECT = os.environ.get("RFS_PROJECT")
+TRANSCRIPT = ROOT / "tests" / "fixtures" / "transcript.json"   # transcription-skill/transcript/0.1, fictional
+
+# The caption timeline TRANSCRIPT must produce on the 8 s fixture: every time is the transcript's own.
+# seg_0001 (Japanese, no spaces) is one cue from its words; seg_0002 has no word timings, so it is one
+# plain cue on the segment's times; seg_0003 splits at its 0.8 s pause; cues never cross a segment.
+TRANSCRIPT_CUES = [
+    {"start": 0.3, "end": 2.8, "text": "本日の講演を始めます。"},
+    {"start": 3.2, "end": 4.5, "text": "Inside the silence."},
+    {"start": 5.2, "end": 6.4, "text": "Welcome to the first session."},
+    {"start": 7.2, "end": 7.6, "text": "Thanks."},
+]
+TRANSCRIPT_WORDS = [
+    (0.3, 0.7, "本日"), (0.7, 0.86, "の"), (0.86, 1.4, "講演"), (1.4, 1.56, "を"), (1.56, 2.1, "始め"),
+    (2.1, 2.8, "ます。"), (5.2, 5.6, " Welcome"), (5.6, 5.74, " to"), (5.74, 5.9, " the"), (5.9, 6.3, " first"),
+    (6.3, 6.4, " session."), (7.2, 7.6, " Thanks."),
+]
 
 SRT = """1
 00:00:00,300 --> 00:00:02,800
@@ -97,6 +113,65 @@ class Analyze(unittest.TestCase):
     def test_captions_carried_as_written(self):
         self.assertEqual([c["text"] for c in self.timeline["captions"]],
                          ["Placeholder caption one.", "Inside the silence.", "Placeholder caption two."])
+
+    def test_transcript_drives_the_caption_timeline(self):
+        tl = self.tmp / "transcript.timeline.json"
+        code, res = script("analyze", self.src, "--words", TRANSCRIPT, "-o", tl, "--no-scenes")
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(_common.validate_timeline(t), [])
+        self.assertEqual(t["captions"], TRANSCRIPT_CUES)
+        self.assertEqual([(w["start"], w["end"], w["text"]) for w in t["words"]], TRANSCRIPT_WORDS)
+        self.assertEqual(res["summary"]["captions"], 4)
+        self.assertEqual(res["summary"]["words"], 12)
+        warn = "\n".join(t["warnings"])
+        self.assertIn("transcript: seg_0002: word timestamps discarded", warn)   # the transcript's own warning
+        self.assertIn("no word timings for seg_0002", warn)
+        self.assertIn("not these exact bytes", warn)                             # fixture.json names other bytes
+        for comp in ("Karaoke", "Captioned"):
+            proj = self.tmp / "proj_tr"
+            if not proj.exists():
+                script("init", proj)
+            code, res = script("render", "--project", proj, "--comp", comp, "--timeline", tl,
+                               "-o", self.tmp / f"tr_{comp}.mp4", "--dry-run")
+            self.assertEqual(code, 0, res)
+            self.assertEqual(res["expected_frames"], _common.expected_frames(comp, t))
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_karaoke_from_transcript(self):
+        tl = self.tmp / "transcript_real.timeline.json"
+        code, res = script("analyze", self.src, "--words", TRANSCRIPT, "-o", tl, "--no-scenes")
+        self.assertEqual(code, 0, res)
+        code, res = script("render", "--project", PROJECT, "--comp", "Karaoke", "--timeline", tl,
+                           "-o", self.tmp / "tr_karaoke.mp4", "--fast")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+
+    def test_transcript_words_with_srt_cues(self):
+        tl = self.tmp / "transcript_srt.timeline.json"
+        code, res = script("analyze", self.src, "--captions", self.tmp / "cues.srt", "--words", TRANSCRIPT,
+                           "-o", tl, "--no-scenes", "--no-silence")
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(t["captions"], self.timeline["captions"])   # the SRT wins, unchanged
+        self.assertEqual(len(t["words"]), 12)
+
+    def test_transcript_refused_when_it_cannot_be_trusted(self):
+        doc = json.loads(TRANSCRIPT.read_text(encoding="utf-8"))
+        cases = {
+            "version": dict(doc, schema="transcription-skill/transcript/0.2"),
+            "missing": {k: v for k, v in doc.items() if k != "provenance"},
+            "other_file": dict(doc, duration=20.0, source=dict(doc["source"], media_duration=20.0)),
+        }
+        for name, bad in cases.items():
+            with self.subTest(name):
+                f = self.tmp / f"bad_{name}.json"
+                f.write_text(json.dumps(bad, ensure_ascii=False), encoding="utf-8")
+                out = self.tmp / f"bad_{name}.timeline.json"
+                code, res = script("analyze", self.src, "--words", f, "-o", out, "--no-scenes", "--no-silence")
+                self.assertEqual(code, 2, res)
+                self.assertEqual(res["kind"], "input")
+                self.assertFalse(out.exists())
 
     def test_existing_output_refused(self):
         code, res = script("analyze", self.src, "-o", self.tl)

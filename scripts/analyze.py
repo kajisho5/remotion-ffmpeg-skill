@@ -14,8 +14,10 @@ Examples:
   python3 analyze.py music.mp4 --beats                     # also measure the beat grid
   python3 analyze.py talk.mp4 --threshold -42 --min-silence 0.8   # quiet room
   python3 analyze.py intro.mp4 talk.mov outro.mp4 --captions all.srt  # joined, then measured
+  python3 analyze.py talk.mp4 --words talk.transcript.json   # captions from a transcription-skill transcript
 """
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,7 +26,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
                      require_ffmpeg_skill, shell_join, version)
-from _captions import CaptionError, cues_from_words, parse_chapters, read_captions, read_words, youtube_chapter_warnings
+from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_word_timings,
+                       youtube_chapter_warnings)
+
+# seconds a transcript's duration may differ from the measured source (transcription-skill's own END_TOLERANCE)
+TRANSCRIPT_DURATION_TOLERANCE = 0.5
+
+
+def file_fingerprint(path: Path) -> str:
+    """`sha256:<hex>` of the file bytes -- the identity transcription-skill writes to source.fingerprint."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return "sha256:" + h.hexdigest()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,8 +52,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--join-duration", type=float, default=0.5, help="transition length in seconds (default 0.5)")
     p.add_argument("-o", "--output", help="timeline file (default: <name>.timeline.json)")
     p.add_argument("--captions", help="SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written)")
-    p.add_argument("--words", help="word timings from a speech engine (whisper JSON with word timestamps) for the "
-                                    "Karaoke composition; without --captions the cues are grouped from these words")
+    p.add_argument("--words", help="word timings for the Karaoke and Captioned compositions: a transcription-skill "
+                                    "transcript (schema transcription-skill/transcript/0.1, validated strictly) or whisper "
+                                    "JSON with word timestamps; without --captions the cues are grouped from these words")
     p.add_argument("--chapters", metavar="FILE|source",
                    help="chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill "
                         "metadata.py --chapters writes into the container), or `source` for the chapters already "
@@ -127,16 +143,20 @@ def main() -> None:
             die(f"cannot read {cpath}: {e}", "input")
 
     words: List[Dict[str, Any]] = []
+    transcript: Optional[Dict[str, Any]] = None
     if a.words:
         wpath = Path(a.words).expanduser()
         if not wpath.is_file():
             die(f"word timings file not found: {wpath}", "input")
         try:
-            words = read_words(wpath)
+            timed = read_word_timings(wpath)
         except (CaptionError, ValueError) as e:
             die(f"cannot read {wpath}: {e}", "input")
+        words = timed["words"]
+        if timed["cues"] is not None:
+            transcript = timed
         if not captions:
-            captions = cues_from_words(words)
+            captions = timed["cues"] if transcript else cues_from_words(words)
 
     join_args = [*map(str, inputs), "-o", str(joined), "--transition", a.join_transition,
                  "--duration", str(a.join_duration)] + (["--overwrite"] if STATE.overwrite else [])
@@ -181,6 +201,19 @@ def main() -> None:
     if clips:
         # The last boundary is the measured joined duration (encoders can round the tail by a frame).
         clips[-1]["end"] = round(duration, 3)
+
+    transcript_warnings: List[str] = []
+    if transcript:
+        # The transcript's times are seconds on the file it was made from: a different length means a
+        # different file, and its words would land in the wrong places.
+        if abs(transcript["duration"] - duration) > TRANSCRIPT_DURATION_TOLERANCE:
+            die(f"--words: the transcript is of a {transcript['duration']:.3f} s file ({transcript['filename']}), "
+                f"the source measures {duration:.3f} s; transcribe this source (or the joined file)", "input")
+        if transcript["fingerprint"] != file_fingerprint(src):
+            transcript_warnings.append(
+                f"--words: the transcript was made from {transcript['filename']}, not these exact bytes "
+                f"(same length, so its times are used as written)")
+        transcript_warnings += transcript["warnings"]
 
     scenes: List[Dict[str, float]] = [{"start": 0.0, "end": round(duration, 3)}]
     peaks: List[Dict[str, float]] = []
@@ -285,7 +318,7 @@ def main() -> None:
         "words": words,
         "chapters": chapters,
         "pip": pip,
-        "warnings": warnings_for(probe) + youtube_chapter_warnings(chapters) if chapters else warnings_for(probe),
+        "warnings": warnings_for(probe) + (youtube_chapter_warnings(chapters) if chapters else []) + transcript_warnings,
     }
     if pip and pip["measured"] and (pip["confidence"] or 0) < 0.3:
         timeline["warnings"].append(f"pip: the measured offset ({pip['offset']:g} s) has low confidence "

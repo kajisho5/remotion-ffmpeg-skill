@@ -24,7 +24,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--join-duration` | number | `0.5` | transition length in seconds (default 0.5) |
 | `--output` | string |  | timeline file (default: <name>.timeline.json) |
 | `--captions` | string |  | SRT, WebVTT or JSON cue list to carry into the timeline (text kept as written) |
-| `--words` | string |  | word timings from a speech engine (whisper JSON with word timestamps) for the Karaoke composition; without --captions the cues are grouped from these words |
+| `--words` | string |  | word timings for the Karaoke and Captioned compositions: a transcription-skill transcript (schema transcription-skill/transcript/0.1, validated strictly) or whisper JSON with word timestamps; without --captions the cues are grouped from these words |
 | `--chapters` | string |  | chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill metadata.py --chapters writes into the container), or `source` for the chapters already in the input file; titles are kept as written |
 | `--pip` | string |  | a second recording (camera) for the Pip composition: picture-in-picture over the source. The offset between the two is measured from their audio with ffmpeg-skill sync.py |
 | `--pip-offset` | number |  | with --pip: the camera starts this many seconds after the source (negative: before), instead of measuring it -- for a camera without usable audio |
