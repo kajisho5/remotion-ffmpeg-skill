@@ -142,10 +142,11 @@ class Analyze(unittest.TestCase):
         tl = self.tmp / "transcript_real.timeline.json"
         code, res = script("analyze", self.src, "--words", TRANSCRIPT, "-o", tl, "--no-scenes")
         self.assertEqual(code, 0, res)
-        code, res = script("render", "--project", PROJECT, "--comp", "Karaoke", "--timeline", tl,
-                           "-o", self.tmp / "real_transcript_karaoke.mp4", "--fast")
-        self.assertEqual(code, 0, res)
-        self.assertTrue(res["verified"])
+        proc = subprocess.run([sys.executable, str(SCRIPTS / "render.py"), "--project", PROJECT, "--comp", "Karaoke",
+                               "--timeline", str(tl), "-o", str(self.tmp / "real_transcript_karaoke.mp4"), "--fast",
+                               "--json"], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:] + proc.stderr[-4000:])
+        self.assertTrue(json.loads(proc.stdout)["verified"])
 
     def test_transcript_words_with_srt_cues(self):
         tl = self.tmp / "transcript_srt.timeline.json"
