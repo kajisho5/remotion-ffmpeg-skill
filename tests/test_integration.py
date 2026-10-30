@@ -389,27 +389,36 @@ class Analyze(unittest.TestCase):
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 
-def make_vfr(d: Path, name: str = "vfr.mp4", pix_fmt: str = "yuv420p", tags=()) -> Path:
-    """4 s at a 30 fps base rate with every 8th-10th frame of each ten dropped: variable frame rate."""
+def hdr_tags(transfer: str):
+    """BT.2020 + PQ / HLG on the frames, the stream and in the H.264 VUI itself (FFmpeg 7+ no longer lets
+    the output options alone override the untagged frames lavfi makes)."""
+    vui = {"smpte2084": 16, "arib-std-b67": 18}[transfer]
+    return (f"setparams=color_primaries=bt2020:color_trc={transfer}:colorspace=bt2020nc",
+            ["-color_primaries", "bt2020", "-color_trc", transfer, "-colorspace", "bt2020nc",
+             "-bsf:v", f"h264_metadata=colour_primaries=9:transfer_characteristics={vui}:matrix_coefficients=9"])
+
+
+def make_vfr(d: Path, name: str = "vfr.mp4", transfer: str = "") -> Path:
+    """4 s at a 30 fps base rate with every 8th-10th frame of each ten dropped: variable frame rate
+    (10-bit and tagged HDR with `transfer`)."""
     out = d / name
+    vf, tags = hdr_tags(transfer) if transfer else ("", [])
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=4",
-                    "-f", "lavfi", "-i", "sine=f=440:d=4", "-vf", "select='lt(mod(n\\,10)\\,7)'",
-                    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", pix_fmt, *tags, "-c:a", "aac", "-shortest",
-                    str(out)], check=True)
+                    "-f", "lavfi", "-i", "sine=f=440:d=4",
+                    "-vf", "select='lt(mod(n\\,10)\\,7)'" + (f",{vf}" if vf else ""),
+                    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p10le" if transfer else "yuv420p",
+                    *tags, "-c:a", "aac", "-shortest", str(out)], check=True)
     return out
 
 
 def make_hdr(d: Path, transfer: str, name: str) -> Path:
     """3 s, 30 fps, 10-bit, tagged BT.2020 with a PQ (smpte2084) or HLG (arib-std-b67) transfer."""
     out = d / name
+    vf, tags = hdr_tags(transfer)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=3",
-                    "-f", "lavfi", "-i", "sine=f=440:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p10le",
-                    "-color_primaries", "bt2020", "-color_trc", transfer, "-colorspace", "bt2020nc",
-                    "-c:a", "aac", "-shortest", str(out)], check=True)
+                    "-f", "lavfi", "-i", "sine=f=440:d=3", "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p10le",
+                    *tags, "-c:a", "aac", "-shortest", str(out)], check=True)
     return out
-
-
-HDR_TAGS = ("-color_primaries", "bt2020", "-color_trc", "arib-std-b67", "-colorspace", "bt2020nc")
 
 
 def frame_intervals(path: Path):
@@ -443,7 +452,7 @@ class Conform(unittest.TestCase):
         cls.vfr = make_vfr(cls.tmp)
         cls.pq = make_hdr(cls.tmp, "smpte2084", "pq.mp4")
         cls.hlg = make_hdr(cls.tmp, "arib-std-b67", "hlg.mp4")
-        cls.hlg_vfr = make_vfr(cls.tmp, "hlg_vfr.mp4", "yuv420p10le", HDR_TAGS)
+        cls.hlg_vfr = make_vfr(cls.tmp, "hlg_vfr.mp4", "arib-std-b67")
         cls.hashes = {p: sha256(p) for p in (cls.vfr, cls.pq, cls.hlg, cls.hlg_vfr)}
 
     @classmethod
