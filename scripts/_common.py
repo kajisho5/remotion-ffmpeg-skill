@@ -332,7 +332,8 @@ def _stage(project: Path, src: Path, folder: str) -> str:
         os.link(src, dst)
     except OSError:
         info(f"copying {src.name} into the project (hard link not possible across drives) ...")
-        shutil.copy2(src, dst)
+        # Bytes only: copying a macOS system font's file flags (copy2 -> chflags) is not permitted.
+        shutil.copyfile(src, dst)
     return rel
 
 
