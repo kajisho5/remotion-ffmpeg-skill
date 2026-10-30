@@ -6,7 +6,7 @@ Read the one you need; SKILL.md has the one-line versions.
 ## Frames and timing
 - **Python `round()` is not JavaScript `Math.round()`.** 3.15 s × 30 fps = 94.5: Python gives 94 (half to even), the composition gives 95. render.py's expected frame count was off by one frame per half-frame boundary. Both sides now use round-half-up (`sec_to_frames`, `secToFrames`); a test pins it.
 - **Count frames, not seconds.** AAC priming/padding makes a container 20–50 ms longer than its picture. render.py compares the video stream's `nb_frames` with the expected count exactly and only falls back to a duration tolerance when the container has no frame count.
-- **Variable frame rate sources drift.** Remotion renders on a fixed grid; analyze.py warns on suspected VFR. Make a constant-frame-rate copy with ffmpeg-skill first.
+- **Variable frame rate sources drift.** Remotion renders on a fixed grid. analyze.py refuses a suspected-VFR source; `--conform` makes a constant-frame-rate copy with ffmpeg-skill `fit.py --fps` at the stream's base rate (r_frame_rate, so no frame is dropped; the average rate of a phone clip is not a frame grid) and measures and draws on that.
 
 ## Files Remotion can and cannot read
 - **Symlinks in `public/` 404.** Remotion's file server refuses a symlink that points outside the project. Sources and fonts are hard-linked (instant, no extra space) or copied once.
@@ -14,7 +14,7 @@ Read the one you need; SKILL.md has the one-line versions.
 - **Props files are named by content** (`.rfs/props-<comp>-<hash>.json`): one name per composition used to let two parallel renders overwrite each other's props.
 
 ## Picture
-- **HDR / BT.2020 looks washed out.** Chrome composites in SDR. analyze.py warns; convert with ffmpeg-skill `color.py --to-sdr` first.
+- **HDR / BT.2020 looks washed out.** Chrome composites in SDR. analyze.py refuses PQ / HLG / Dolby Vision and BT.2020 sources; `--conform` tone-maps a copy to SDR BT.709 with ffmpeg-skill `color.py --to-sdr`. A VFR HDR source is made CFR first (`fit.py` keeps HDR), then tone-mapped once: `color.py` on a VFR input would conform it to the *average* rate itself.
 - **Delivery templates crop.** ffmpeg-skill's Reels / TikTok / Shorts templates fit to 9:16 by cropping, so a 16:9 render loses the edges of every caption. Render in the delivery shape (`--aspect 9:16`, or `pipeline.py --platform`, which reads the template's aspect).
 - **Remotion's default concurrency is half the CPU cores.** render.py passes `--concurrency 100%`: 30 s of 1080p30 on 2 cores went from 170 s to 80 s. A number above the core count is an error.
 - **`--overlay` is not faster.** Transparent PNG frames plus ProRes 4444 cost about what decoding the source saves (170 s vs 174 s for 30 s of 1080p30 on 2 cores). It exists for handing a graphics layer to an editing app.

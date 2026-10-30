@@ -15,6 +15,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import _common  # noqa: E402
 import _contract  # noqa: E402
+import analyze  # noqa: E402
 
 HAVE = shutil.which("ffmpeg") and _common.find_ffmpeg_skill() is not None
 PROJECT = os.environ.get("RFS_PROJECT")
@@ -386,6 +387,215 @@ class Analyze(unittest.TestCase):
                 self.assertTrue(res["verified"])
                 self.assertEqual(_contract.missing_output_keys("render", res), [])
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
+
+
+def hdr_tags(transfer: str):
+    """BT.2020 + PQ / HLG on the frames, the stream and in the H.264 VUI itself (FFmpeg 7+ no longer lets
+    the output options alone override the untagged frames lavfi makes)."""
+    vui = {"smpte2084": 16, "arib-std-b67": 18}[transfer]
+    return (f"setparams=color_primaries=bt2020:color_trc={transfer}:colorspace=bt2020nc",
+            ["-color_primaries", "bt2020", "-color_trc", transfer, "-colorspace", "bt2020nc",
+             "-bsf:v", f"h264_metadata=colour_primaries=9:transfer_characteristics={vui}:matrix_coefficients=9"])
+
+
+def make_vfr(d: Path, name: str = "vfr.mp4", transfer: str = "") -> Path:
+    """4 s at a 30 fps base rate with every 8th-10th frame of each ten dropped: variable frame rate
+    (10-bit and tagged HDR with `transfer`)."""
+    out = d / name
+    vf, tags = hdr_tags(transfer) if transfer else ("", [])
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=4",
+                    "-f", "lavfi", "-i", "sine=f=440:d=4",
+                    "-vf", "select='lt(mod(n\\,10)\\,7)'" + (f",{vf}" if vf else ""),
+                    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p10le" if transfer else "yuv420p",
+                    *tags, "-c:a", "aac", "-shortest", str(out)], check=True)
+    return out
+
+
+def make_hdr(d: Path, transfer: str, name: str) -> Path:
+    """3 s, 30 fps, 10-bit, tagged BT.2020 with a PQ (smpte2084) or HLG (arib-std-b67) transfer."""
+    out = d / name
+    vf, tags = hdr_tags(transfer)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=3",
+                    "-f", "lavfi", "-i", "sine=f=440:d=3", "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p10le",
+                    *tags, "-c:a", "aac", "-shortest", str(out)], check=True)
+    return out
+
+
+def frame_intervals(path: Path):
+    """Every interval between consecutive video frames, from ffprobe's packet timestamps (test-side check)."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time",
+                          "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout
+    pts = sorted(float(x.strip().rstrip(",")) for x in out.split() if x.strip().rstrip(",") not in ("", "N/A"))
+    return [b - a for a, b in zip(pts, pts[1:])]
+
+
+def colour_tags(path: Path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                          "stream=color_transfer,color_primaries,color_space", "-of", "json", str(path)],
+                         capture_output=True, text=True, check=True).stdout
+    return json.loads(out)["streams"][0]
+
+
+def sha256(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class Conform(unittest.TestCase):
+    """A VFR or HDR source is never only warned about: it is refused, or with --conform measured and
+    drawn on a CFR / SDR BT.709 copy that ffmpeg-skill made, with the original untouched."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="rfs-conform-"))
+        cls.vfr = make_vfr(cls.tmp)
+        cls.pq = make_hdr(cls.tmp, "smpte2084", "pq.mp4")
+        cls.hlg = make_hdr(cls.tmp, "arib-std-b67", "hlg.mp4")
+        cls.hlg_vfr = make_vfr(cls.tmp, "hlg_vfr.mp4", "arib-std-b67")
+        cls.hashes = {p: sha256(p) for p in (cls.vfr, cls.pq, cls.hlg, cls.hlg_vfr)}
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def tearDown(self):
+        for p, h in self.hashes.items():
+            self.assertEqual(sha256(p), h, f"{p.name} was modified")
+
+    def test_fixtures_are_what_they_claim(self):
+        for path, want in ((self.vfr, ["vfr"]), (self.pq, ["hdr"]), (self.hlg, ["hdr"]), (self.hlg_vfr, ["vfr", "hdr"])):
+            pr = _common.ffskill("probe", [str(path)])
+            self.assertEqual(analyze.conform_needs(pr), want, path.name)
+        self.assertGreater(max(frame_intervals(self.vfr)) - min(frame_intervals(self.vfr)), 0.03)
+
+    def test_refused_without_conform(self):
+        d = self.tmp / "refused"
+        d.mkdir()
+        for orig, need in ((self.vfr, "vfr"), (self.pq, "hdr"), (self.hlg, "hdr")):
+            path = Path(shutil.copyfile(orig, d / orig.name))
+            for dry in ([], ["--dry-run"]):
+                with self.subTest(path.name, dry=bool(dry)):
+                    out = self.tmp / f"refused_{path.stem}.timeline.json"
+                    code, res = script("analyze", path, "-o", out, *dry)
+                    self.assertEqual(code, 2, res)
+                    self.assertEqual(res["kind"], "input")
+                    self.assertIn("--conform", res["error"])
+                    self.assertIn(need, res["conform_needed"])
+                    self.assertFalse(out.exists())
+                    self.assertEqual(sorted(f.name for f in d.iterdir()), sorted(f.name for f in d.glob("*.mp4")))
+                    self.assertFalse((d / f"{path.stem}_conformed.mp4").exists())
+
+    def assert_conformed(self, src: Path, reasons, steps):
+        tl = self.tmp / f"{src.stem}.timeline.json"
+        code, res = script("analyze", src, "--conform", "-o", tl, "--no-scenes")
+        self.assertEqual(code, 0, res)
+        self.assertEqual(_contract.missing_output_keys("analyze", res), [])
+        self.assertEqual(res["summary"]["conformed"], reasons)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(_common.validate_timeline(t), [])
+        copy = Path(t["source"]["path"])
+        self.assertEqual(copy, (self.tmp / f"{src.stem}_conformed.mp4").resolve())
+        c = t["conform"]
+        self.assertEqual(c["reasons"], reasons)
+        self.assertEqual(c["output"], str(copy))
+        self.assertEqual(c["original"]["path"], str(src.resolve()))
+        self.assertEqual(c["original"]["fingerprint"], "sha256:" + self.hashes[src])
+        self.assertEqual([(st["reason"], st["tool"]) for st in c["steps"]], steps)
+        self.assertTrue(all(st["command"] in res["commands"] for st in c["steps"]))
+        self.assertFalse([w for w in t["warnings"] if "frame rate" in w or "HDR" in w], t["warnings"])
+        self.assertFalse(list(self.tmp.glob(".rfs-conform-*")))   # the intermediate between two steps is gone
+        # Measured: ffmpeg-skill's probe of the copy, and the frame timestamps and colour tags themselves.
+        pr = _common.ffskill("probe", [str(copy)])
+        self.assertEqual(analyze.conform_needs(pr), [])
+        self.assertEqual(t["source"]["fps"], 30.0)
+        intervals = frame_intervals(copy)
+        self.assertTrue(intervals and all(abs(d - 1 / 30) < 1e-3 for d in intervals), (min(intervals), max(intervals)))
+        self.assertAlmostEqual(t["source"]["duration"], c["original"]["duration"], delta=0.1)
+        return t, copy
+
+    def test_vfr_becomes_cfr(self):
+        t, copy = self.assert_conformed(self.vfr, ["vfr"], [("vfr", "ffmpeg-skill fit.py")])
+        self.assertEqual(t["conform"]["original"]["r_frame_rate"], "30/1")
+        self.assertTrue(t["conform"]["original"]["variable_frame_rate_suspected"])
+
+    def test_pq_and_hlg_become_sdr_bt709(self):
+        for src in (self.pq, self.hlg):
+            with self.subTest(src.name):
+                t, copy = self.assert_conformed(src, ["hdr"], [("hdr", "ffmpeg-skill color.py")])
+                self.assertEqual(colour_tags(copy), {"color_space": "bt709", "color_transfer": "bt709",
+                                                     "color_primaries": "bt709"})
+                self.assertEqual(t["conform"]["measured"]["color_transfer"], "bt709")
+                self.assertIn(t["conform"]["original"]["color_transfer"], ("smpte2084", "arib-std-b67"))
+                self.assertTrue(t["conform"]["steps"][0]["notes"])   # ffmpeg-skill's own "tone-mapped ..." note
+
+    def test_vfr_hdr_is_conformed_in_order(self):
+        t, copy = self.assert_conformed(self.hlg_vfr, ["vfr", "hdr"],
+                                        [("vfr", "ffmpeg-skill fit.py"), ("hdr", "ffmpeg-skill color.py")])
+        self.assertEqual(colour_tags(copy)["color_transfer"], "bt709")
+
+    def test_dry_run_plans_the_conform(self):
+        out = self.tmp / "dry_conform.timeline.json"
+        code, res = script("analyze", self.pq, "--conform", "--conformed", self.tmp / "dry_copy.mp4", "-o", out,
+                           "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(any("color.py" in c and "--to-sdr" in c for c in res["commands"]), res["commands"])
+        self.assertTrue(any("scenes.py" in c and "dry_copy.mp4" in c for c in res["commands"]))
+        self.assertFalse(out.exists())
+        self.assertFalse((self.tmp / "dry_copy.mp4").exists())
+
+    def test_conform_flags_need_conform_and_never_overwrite_the_original(self):
+        code, res = script("analyze", self.vfr, "--conform-fps", "25", "-o", self.tmp / "x.json")
+        self.assertEqual((code, res["kind"]), (2, "input"))
+        code, res = script("analyze", self.vfr, "--conform", "--conformed", self.vfr, "-o", self.tmp / "y.json",
+                           "--overwrite")
+        self.assertEqual((code, res["kind"]), (2, "input"), res)
+
+    def test_pip_camera_is_conformed_too(self):
+        src = make_fixture(self.tmp)
+        cam = Path(shutil.copyfile(self.hlg, self.tmp / "camera_hlg.mp4"))
+        code, res = script("analyze", src, "--pip", cam, "--pip-offset", "0.5", "-o", self.tmp / "p0.json",
+                           "--no-scenes", "--no-silence")
+        self.assertEqual((code, res["kind"]), (2, "input"), res)
+        self.assertIn("--pip camera", res["error"])
+        tl = self.tmp / "pip.timeline.json"
+        code, res = script("analyze", src, "--pip", cam, "--pip-offset", "0.5", "--conform", "-o", tl,
+                           "--no-scenes", "--no-silence", "--overwrite")
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertIsNone(t["conform"])                      # the SDR CFR source itself is used as it is
+        self.assertEqual(res["summary"]["conformed"], [])
+        self.assertEqual(t["pip"]["conform"]["reasons"], ["hdr"])
+        self.assertEqual(t["pip"]["path"], t["pip"]["conform"]["output"])
+        self.assertEqual(Path(t["pip"]["path"]).name, "camera_hlg_conformed.mp4")
+        self.assertEqual(colour_tags(Path(t["pip"]["path"]))["color_transfer"], "bt709")
+
+    def test_render_draws_on_the_conformed_copy(self):
+        tl = self.tmp / "render_src.timeline.json"
+        code, res = script("analyze", self.pq, "--conform", "--conformed", self.tmp / "pq_render.mp4", "-o", tl,
+                           "--no-scenes")
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        proj = self.tmp / "proj"
+        script("init", proj)
+        # --overlay plans the composite over the timeline's source: the conformed copy, not the original
+        code, res = script("render", "--project", proj, "--comp", "Captioned", "--timeline", tl,
+                           "-o", self.tmp / "pq_captioned.mp4", "--overlay", "--dry-run")
+        self.assertEqual(code, 0, res)
+        overlay = next(c for c in res["commands"] if "overlay.py" in c)
+        self.assertIn("pq_render.mp4", overlay)
+        self.assertNotIn(str(self.pq), overlay)
+        self.assertEqual(res["expected_frames"], _common.expected_frames("Captioned", t))
+        if PROJECT:
+            out = self.tmp / "pq_captioned_real.mp4"
+            code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", tl,
+                               "-o", out, "--fast", "--no-look")
+            self.assertEqual(code, 0, res)
+            self.assertTrue(res["verified"])
+            # Remotion tags its own transfer (sRGB); what matters is that no HDR signal reached the render
+            self.assertNotIn(colour_tags(out).get("color_transfer"), ("smpte2084", "arib-std-b67"))
+            self.assertNotEqual(colour_tags(out).get("color_primaries"), "bt2020")
+            self.assertTrue(list((Path(PROJECT) / "public" / "media").glob("*_pq_render.mp4")))
 
 
 if __name__ == "__main__":

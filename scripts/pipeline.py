@@ -36,6 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--platform", choices=PLATFORMS, help="deliver with this ffmpeg-skill template and check it")
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
+    p.add_argument("--conform", action="store_true",
+                   help="a variable-frame-rate or HDR source is made into a constant-frame-rate, SDR BT.709 copy "
+                        "with ffmpeg-skill first (analyze.py --conform; the copy goes in --out-dir) and drawn on; "
+                        "without it such a source is refused")
     p.add_argument("--fast", action="store_true", help="preview-quality render")
     p.add_argument("--aspect", choices=["source", *ASPECTS],
                    help="output shape (default: the shape the --platform template delivers, else the source's)")
@@ -85,6 +89,7 @@ def main() -> None:
     an_args = [*map(str, inputs), "-o", str(tl)] + (["--joined", str(out_dir / f"{stem}.mp4")] if len(inputs) > 1 else [])
     an_args += (["--captions", a.captions] if a.captions else []) + (["--beats"] if a.beats else [])
     an_args += ["--chapters", a.chapters] if a.chapters else []
+    an_args += ["--conform", "--conformed", str(out_dir / f"{stem}_conformed.mp4")] if a.conform else []
     analysis = step("measure", "analyze", an_args, steps)
     if STATE.dry_run and not tl.exists():
         emit({"output": None, "steps": steps,

@@ -36,7 +36,7 @@ Built on [**ffmpeg-skill**](https://github.com/kajisho5/ffmpeg-skill). Unofficia
 |---|---|---|
 | Writes Remotion compositions | ✅ | ✅ (three ready-made, timeline-driven) |
 | Knows the source's real duration / fps / size / silences / scene cuts / audio peaks | — | ✅ measured by ffmpeg-skill |
-| Warns before drawing on VFR or HDR footage | — | ✅ |
+| Never draws on VFR or HDR footage as is: refuses it, or (`--conform`) draws on a CFR, SDR BT.709 copy ffmpeg-skill made, original untouched | — | ✅ |
 | Verifies the render (exact frame count, fps, size, audio) | — | ✅ non-zero exit on mismatch |
 | Looks at the result (contact sheet) | — | ✅ |
 | Delivers for YouTube / Reels / TikTok / Shorts / X with loudness and compliance checks | — | ✅ ffmpeg-skill templates + `check.py` |

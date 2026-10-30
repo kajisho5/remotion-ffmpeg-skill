@@ -32,6 +32,17 @@ export type Pip = {
   offset: number;
   confidence: number | null;
   measured: boolean;
+  /** The camera's own conform record when analyze.py --conform conformed it. */
+  conform?: Conform | null;
+};
+/** Provenance of a source analyze.py --conform made drawable (VFR -> CFR, HDR -> SDR BT.709 with
+ * ffmpeg-skill). The compositions never read it: the source above is already the conformed copy. */
+export type Conform = {
+  reasons: ("vfr" | "hdr")[];
+  original: { path: string; name: string; fingerprint: string } & Record<string, unknown>;
+  output: string;
+  steps: { reason: "vfr" | "hdr"; tool: string; args: string[]; command: string; notes: string[] }[];
+  measured: Record<string, unknown>;
 };
 export type Beats = { times: number[]; tempo_bpm: number | null; confidence: number | null; usable: boolean };
 export type Highlight = { start: number; end: number };
@@ -57,6 +68,8 @@ export type Timeline = {
   /** Chapters from the user's list or the source's own markers (analyze.py --chapters); titles as written. */
   chapters?: Chapter[];
   pip?: Pip | null;
+  /** Set when analyze.py --conform measured a conformed copy instead of the original (null otherwise). */
+  conform?: Conform | null;
   warnings?: string[];
 };
 

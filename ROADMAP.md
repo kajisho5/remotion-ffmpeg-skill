@@ -36,7 +36,7 @@ Tick a box when it ships (with its test and docs). Order inside a group is prior
 - [ ] External mic first: ffmpeg-skill `sync.py --replace-audio` puts the lav / recorder audio on the picture before measuring and drawing
 - [ ] Multicam + speaker names: ffmpeg-skill `multicam.py` cuts between cameras; a name title per camera from the user's list
 - [ ] Music under the edit: ffmpeg-skill background music with ducking; motion follows the music's measured beats, not the speech
-- [ ] Fix the source before drawing: VFR -> constant frame rate, HDR -> SDR with ffmpeg-skill (today `analyze.py` only warns)
+- [x] Fix the source before drawing: VFR -> constant frame rate, HDR -> SDR with ffmpeg-skill (`analyze.py --conform`; without it such a source is refused)
 - [ ] Podcast clips: ffmpeg-skill's measured waveform drives an animated waveform + speaker photo + captions, vertical
 - [ ] Redact, then draw: ffmpeg-skill `redact.py` blurs faces / personal data before the graphics go on
 - [ ] Captions both ways: burned-in animated captions plus a switchable subtitle track (ffmpeg-skill `caption.py --mode mux`)

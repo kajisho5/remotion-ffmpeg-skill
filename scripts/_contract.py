@@ -36,9 +36,12 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
     "analyze": {
         "role": "analysis",
         "summary": "Measure a source with ffmpeg-skill and write timeline.json (+ captions from a file).",
-        "writes": "timeline.json",
-        "verification": "every number comes from ffmpeg-skill probe/scenes/silence; warnings for VFR/HDR/rotation",
-        "ffmpeg_skill": ["probe", "scenes", "silence"],
+        "writes": "timeline.json (+ the joined source for several inputs, the conformed copy with --conform)",
+        "verification": "every number comes from ffmpeg-skill probe/scenes/silence; a VFR or HDR source is refused, "
+                        "or with --conform conformed and re-measured (CFR at the asked rate, SDR BT.709) before use; "
+                        "warnings for rotation and odd frame rates",
+        "ffmpeg_skill": ["probe", "scenes", "silence", "join (several inputs)", "sync (--pip)",
+                         "fit (--conform: VFR -> CFR)", "color (--conform: HDR -> SDR)"],
         "dry_run": True,
     },
     "init": {
@@ -78,7 +81,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "summary": "analyze -> render -> deliver in one call, stopping at the first failed step.",
         "writes": "timeline.json, render, deliverable",
         "verification": "each step's own verification",
-        "ffmpeg_skill": ["probe", "scenes", "silence", "look", "render --template", "check"],
+        "ffmpeg_skill": ["probe", "scenes", "silence", "fit (--conform)", "color (--conform)", "look",
+                         "render --template", "check"],
         "dry_run": True,
     },
     "doctor": {
@@ -97,7 +101,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
 OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
     "analyze": {
         "result": {"commands": "list[str]", "verified": "bool", "summary": "object: duration, fps, size, scenes, "
-                   "silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words",
+                   "silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words, "
+                   "conformed (list: vfr / hdr)",
                    "warnings": "list[str]"},
         "dry_run": {"commands": "list[str]"},
     },
