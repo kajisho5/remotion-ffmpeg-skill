@@ -21,7 +21,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
 
 ## Steps
 
-- [ ] **1. Contract in the OS schema shape** — `skill` object or skill_id, provides[], dependencies[] (depends_on is a map today)
+- [x] **1. Contract in the OS schema shape** — `skill` object or skill_id, provides[], dependencies[] (depends_on is a map today)
   - Done when: OS schema validation passes
 - [ ] **2. Captions from a transcription-skill transcript** — `--words` input
   - Done when: integration fixture
