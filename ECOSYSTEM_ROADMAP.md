@@ -23,7 +23,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
 
 - [x] **1. Contract in the OS schema shape** — `skill` object or skill_id, provides[], dependencies[] (depends_on is a map today)
   - Done when: OS schema validation passes
-- [ ] **2. Captions from a transcription-skill transcript** — `--words` input
+- [x] **2. Captions from a transcription-skill transcript** — `--words` input ([#9](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/9))
   - Done when: integration fixture
 - [ ] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading
   - Done when: no warn-only path
