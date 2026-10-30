@@ -47,7 +47,21 @@ class Contract(unittest.TestCase):
     def test_cli_prints_the_contract(self):
         out = subprocess.run([sys.executable, str(ROOT / "scripts" / "_contract.py"), "--json"],
                              capture_output=True, text=True, check=True)
-        self.assertEqual(json.loads(out.stdout)["skill"], "remotion-ffmpeg-skill")
+        doc = json.loads(out.stdout)
+        self.assertEqual((doc["skill_id"], doc["skill"]["id"]), ("remotion-ffmpeg-skill", "remotion-ffmpeg-skill"))
+
+    def test_os_registry_keys(self):
+        # The AI Video Production OS registry shape: skill_id, provides[] (id, lifecycle, tool_id), dependencies[].
+        self.assertEqual(self.c["skill"]["version"], self.c["version"])
+        ids = [p["id"] for p in self.c["provides"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for p in self.c["provides"]:
+            self.assertEqual(set(p), {"id", "lifecycle", "tool_id"})
+            self.assertIn(p["lifecycle"], ("PROPOSED", "EXPERIMENTAL", "STABLE", "DEPRECATED", "RETIRED"))
+            self.assertIn(p["tool_id"].split("/", 1)[1], _contract.TOOL_META)
+        dep = next(d for d in self.c["dependencies"] if d["skill_id"] == "ffmpeg-skill")
+        self.assertTrue(dep["version_range"].startswith(">="))  # a range, never an exact pin
+        self.assertIn("render", dep["scripts"])
 
 
 class Outputs(unittest.TestCase):

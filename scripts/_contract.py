@@ -236,11 +236,31 @@ def tool_spec(name: str) -> Dict[str, Any]:
     }
 
 
+# The AI Video Production OS registry's keys (skill_id, provides[], dependencies[]): one capability
+# per public tool except doctor, all EXPERIMENTAL; ffmpeg-skill is the only Skill this one calls.
+PROVIDES_EXCLUDE = {"doctor"}
+FFMPEG_SKILL_RANGE = ">=2.0.0 <3.0.0"
+
+
+def provides() -> List[Dict[str, str]]:
+    return [{"id": f"remotion.{n}", "lifecycle": "EXPERIMENTAL", "tool_id": f"{SKILL_ID}/{n}"}
+            for n in TOOL_META if n not in PROVIDES_EXCLUDE]
+
+
+def dependencies() -> List[Dict[str, Any]]:
+    used = sorted({s.split()[0] for m in TOOL_META.values() for s in m["ffmpeg_skill"]})
+    return [{"skill_id": "ffmpeg-skill", "version_range": FFMPEG_SKILL_RANGE, "required": True,
+             "url": "https://github.com/kajisho5/ffmpeg-skill", "scripts": used}]
+
+
 def build() -> Dict[str, Any]:
     return {
-        "skill": SKILL_ID,
+        "skill_id": SKILL_ID,
+        "skill": {"id": SKILL_ID, "version": version()},
         "version": version(),
         "contract_version": CONTRACT_VERSION,
+        "provides": provides(),
+        "dependencies": dependencies(),
         "timeline_schema": TIMELINE_SCHEMA,
         "depends_on": {"ffmpeg-skill": "https://github.com/kajisho5/ffmpeg-skill", "node": ">=18",
                        "python": ">=3.10"},
