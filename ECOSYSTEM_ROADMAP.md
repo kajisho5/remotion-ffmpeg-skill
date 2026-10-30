@@ -25,7 +25,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
   - Done when: OS schema validation passes
 - [x] **2. Captions from a transcription-skill transcript** — `--words` input ([#9](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/9))
   - Done when: integration fixture
-- [x] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading (PR_LINK)
+- [x] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading ([#10](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/10))
   - Done when: no warn-only path
 - [ ] **4. (agent side) SkillSpec measured_motion -> pipeline** — CONFIRM
   - Done when: tracked in video-production-agent
