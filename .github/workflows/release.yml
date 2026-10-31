@@ -31,7 +31,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main          # the tip, so an automatic bump commits on top of everything merged
           fetch-depth: 0
