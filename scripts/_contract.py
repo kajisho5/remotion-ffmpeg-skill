@@ -244,7 +244,8 @@ def tool_spec(name: str) -> Dict[str, Any]:
 # The AI Video Production OS registry's keys (skill_id, provides[], dependencies[]): one capability
 # per public tool except doctor, all EXPERIMENTAL; ffmpeg-skill is the only Skill this one calls.
 PROVIDES_EXCLUDE = {"doctor"}
-FFMPEG_SKILL_RANGE = ">=2.0.0 <3.0.0"
+# 3.x accepted (docs/design-decisions.md): 3.0.0 removed nothing this skill calls, and its cut.py changes do not reach it
+FFMPEG_SKILL_RANGE = ">=2.0.0 <4.0.0"
 
 
 def provides() -> List[Dict[str, str]]:

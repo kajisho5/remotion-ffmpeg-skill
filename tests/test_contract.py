@@ -61,6 +61,7 @@ class Contract(unittest.TestCase):
             self.assertIn(p["tool_id"].split("/", 1)[1], _contract.TOOL_META)
         dep = next(d for d in self.c["dependencies"] if d["skill_id"] == "ffmpeg-skill")
         self.assertTrue(dep["version_range"].startswith(">="))  # a range, never an exact pin
+        self.assertEqual(dep["version_range"], ">=2.0.0 <4.0.0")  # ffmpeg-skill 3.x accepted (docs/design-decisions.md)
         self.assertIn("render", dep["scripts"])
 
 
