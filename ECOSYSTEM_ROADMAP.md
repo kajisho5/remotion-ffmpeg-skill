@@ -29,7 +29,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
   - Done when: no warn-only path
 - [ ] **4. (agent side) SkillSpec measured_motion -> pipeline** — CONFIRM
   - Done when: tracked in video-production-agent
-- [x] **5. ffmpeg-skill 3.0.0** — declared range `>=2.0.0 <4.0.0`; CI also against 3.0.0 pinned ([#PRNUM](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/PRNUM))
+- [x] **5. ffmpeg-skill 3.0.0** — declared range `>=2.0.0 <4.0.0`; CI also against 3.0.0 pinned ([#12](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/12))
 
 ## Boundaries
 
