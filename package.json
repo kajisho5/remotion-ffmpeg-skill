@@ -1,6 +1,6 @@
 {
   "name": "remotion-ffmpeg-skill",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Agent Skill: ffmpeg-skill measures the footage, Remotion draws the motion graphics from those measurements, ffmpeg-skill checks and delivers the result. Timeline-driven captions, silence jump cuts and audio-peak motion with probe-first / verify-last rendering. Local, no API keys.",
   "keywords": [
     "remotion",

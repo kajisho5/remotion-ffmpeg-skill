@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.1 — 2026-10-31
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- accept ffmpeg-skill 3.0.0 (range >=2.0.0 <4.0.0); CI also against 3.0.0 (#12)
+
+
 ## 0.12.0 — 2026-10-30
 
 _Automated release: version and notes from what was merged since the previous tag._
