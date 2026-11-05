@@ -27,7 +27,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
   - Done when: integration fixture
 - [x] **3. Fix the source instead of warning** — VFR->CFR, HDR->SDR via ffmpeg-skill / color-grading ([#10](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/10))
   - Done when: no warn-only path
-- [ ] **4. (agent side) SkillSpec measured_motion -> pipeline** — CONFIRM
+- [x] **4. (agent side) SkillSpec measured_motion -> pipeline** — CONFIRM ([video-production-agent#108](https://github.com/kajisho5/video-production-agent/pull/108), its ADR-093: `remotion.comp` + `remotion.project` → a CONFIRM `video.measured_motion` run as `pipeline` after the edits; pinned contract v0.12.1)
   - Done when: tracked in video-production-agent
 - [x] **5. ffmpeg-skill 3.0.0** — declared range `>=2.0.0 <4.0.0`; CI also against 3.0.0 pinned ([#12](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/12))
 
