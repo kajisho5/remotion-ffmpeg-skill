@@ -33,7 +33,7 @@ jobs:
           repository: kajisho5/ffmpeg-skill
           ref: ${{ matrix.ffmpeg_skill.ref }}
           path: _ffmpeg-skill
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
