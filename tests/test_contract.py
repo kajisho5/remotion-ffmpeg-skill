@@ -39,13 +39,64 @@ class Contract(unittest.TestCase):
         self.assertEqual(props["aspect"]["enum"][0], "source")
         self.assertEqual(props["overlay"]["type"], "boolean")
         self.assertEqual(sorted(render["inputSchema"]["required"]), ["comp", "project", "timeline"])
+        analyze = next(t for t in self.c["tools"] if t["name"] == "analyze")
+        self.assertEqual(analyze["inputSchema"]["properties"]["input"]["type"], "array")
         still = next(t for t in self.c["tools"] if t["name"] == "still")
         self.assertEqual(still["inputSchema"]["properties"]["at"]["type"], "array")
 
     def test_cli_prints_the_contract(self):
         out = subprocess.run([sys.executable, str(ROOT / "scripts" / "_contract.py"), "--json"],
                              capture_output=True, text=True, check=True)
-        self.assertEqual(json.loads(out.stdout)["skill"], "remotion-ffmpeg-skill")
+        doc = json.loads(out.stdout)
+        self.assertEqual((doc["skill_id"], doc["skill"]["id"]), ("remotion-ffmpeg-skill", "remotion-ffmpeg-skill"))
+
+    def test_os_registry_keys(self):
+        # The AI Video Production OS registry shape: skill_id, provides[] (id, lifecycle, tool_id), dependencies[].
+        self.assertEqual(self.c["skill"]["version"], self.c["version"])
+        ids = [p["id"] for p in self.c["provides"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for p in self.c["provides"]:
+            self.assertEqual(set(p), {"id", "lifecycle", "tool_id"})
+            self.assertIn(p["lifecycle"], ("PROPOSED", "EXPERIMENTAL", "STABLE", "DEPRECATED", "RETIRED"))
+            self.assertIn(p["tool_id"].split("/", 1)[1], _contract.TOOL_META)
+        dep = next(d for d in self.c["dependencies"] if d["skill_id"] == "ffmpeg-skill")
+        self.assertTrue(dep["version_range"].startswith(">="))  # a range, never an exact pin
+        self.assertEqual(dep["version_range"], ">=2.0.0 <4.0.0")  # ffmpeg-skill 3.x accepted (docs/design-decisions.md)
+        self.assertIn("render", dep["scripts"])
+
+
+class Outputs(unittest.TestCase):
+    def test_every_tool_declares_result_and_dry_run_shapes(self):
+        for name in _contract.TOOL_META:
+            self.assertEqual(set(_contract.OUTPUTS[name]), {"result", "dry_run"}, name)
+
+    def test_doctor_and_dry_runs_conform(self):
+        def run(*args):
+            p = subprocess.run([sys.executable, *map(str, args), "--json"], capture_output=True, text=True)
+            return json.loads(p.stdout)
+        doc = run(ROOT / "scripts" / "doctor.py")
+        self.assertEqual(_contract.missing_output_keys("doctor", doc), [])
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            doc = run(ROOT / "scripts" / "init.py", Path(d) / "p", "--dry-run")
+            self.assertEqual(_contract.missing_output_keys("init", doc), [])
+            doc = run(ROOT / "scripts" / "render.py", "--project", Path(d) / "nope", "--comp", "Captioned",
+                      "--timeline", Path(d) / "missing.json")
+            self.assertEqual(doc["status"], "failed")
+            self.assertEqual(_contract.missing_output_keys("render", doc), [])
+
+
+class Packaging(unittest.TestCase):
+    def test_versions_agree(self):
+        pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(plugin["version"], pkg["version"])
+        self.assertIn(f"## {pkg['version']}", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
+
+    def test_installer_ships_what_skill_md_needs(self):
+        js = (ROOT / "cli" / "remotion-ffmpeg-skill.js").read_text(encoding="utf-8")
+        for item in ("SKILL.md", "scripts", "templates", "references", "mcp"):
+            self.assertIn(f"'{item}'", js)
 
 
 class Transport(unittest.TestCase):
@@ -61,8 +112,14 @@ class Transport(unittest.TestCase):
     def test_positional_and_repeatable(self):
         argv = server.build_argv("still", {"project": "p", "comp": "Captioned", "timeline": "t", "at": [1.5, 6]})
         self.assertEqual(argv.count("--at"), 2)
-        argv = server.build_argv("analyze", {"input": "a.mp4", "captions": "a.srt"})
+        argv = server.build_argv("analyze", {"input": ["a.mp4"], "captions": "a.srt"})
         self.assertEqual(argv[0], "a.mp4")
+        argv = server.build_argv("analyze", {"input": ["a.mp4", "b.mov"]})
+        self.assertEqual(argv[:2], ["a.mp4", "b.mov"])
+
+    def test_generated_reference_is_current(self):
+        out = subprocess.run([sys.executable, str(ROOT / "scripts" / "_docs.py"), "--check"], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
 
     def test_bad_arguments_are_input_errors(self):
         for args in ({"bogus": 1}, {"comp": "Captioned"}):

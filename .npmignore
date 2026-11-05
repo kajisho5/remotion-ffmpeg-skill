@@ -1,0 +1,7 @@
+# package.json "files" scopes the tarball; this drops junk inside those folders.
+__pycache__/
+*.pyc
+node_modules/
+.rfs/
+templates/remotion-project/public/media/
+templates/remotion-project/public/fonts/

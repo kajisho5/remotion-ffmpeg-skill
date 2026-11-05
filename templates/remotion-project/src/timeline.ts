@@ -18,6 +18,32 @@ export type Source = {
 };
 
 export type Caption = { start: number; end: number; text: string };
+export type Chapter = { start: number; end: number; title: string };
+/** A second recording shown picture-in-picture (analyze.py --pip). offset: seconds after the source's
+ * start at which the camera's first frame belongs (measured from both audio tracks, or given). */
+export type Pip = {
+  path: string;
+  name: string;
+  src?: string | null;
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  offset: number;
+  confidence: number | null;
+  measured: boolean;
+  /** The camera's own conform record when analyze.py --conform conformed it. */
+  conform?: Conform | null;
+};
+/** Provenance of a source analyze.py --conform made drawable (VFR -> CFR, HDR -> SDR BT.709 with
+ * ffmpeg-skill). The compositions never read it: the source above is already the conformed copy. */
+export type Conform = {
+  reasons: ("vfr" | "hdr")[];
+  original: { path: string; name: string; fingerprint: string } & Record<string, unknown>;
+  output: string;
+  steps: { reason: "vfr" | "hdr"; tool: string; args: string[]; command: string; notes: string[] }[];
+  measured: Record<string, unknown>;
+};
 export type Beats = { times: number[]; tempo_bpm: number | null; confidence: number | null; usable: boolean };
 export type Highlight = { start: number; end: number };
 /** A lower third: text from the user (options), timing in source seconds. */
@@ -37,6 +63,13 @@ export type Timeline = {
   /** Several inputs joined by ffmpeg-skill: where each clip sits on the joined timeline. */
   clips?: { name: string; start: number; end: number }[];
   captions: Caption[];
+  /** Word timings from a speech engine (analyze.py --words), text with the engine's own spacing. */
+  words?: Caption[];
+  /** Chapters from the user's list or the source's own markers (analyze.py --chapters); titles as written. */
+  chapters?: Chapter[];
+  pip?: Pip | null;
+  /** Set when analyze.py --conform measured a conformed copy instead of the original (null otherwise). */
+  conform?: Conform | null;
   warnings?: string[];
 };
 
@@ -65,6 +98,16 @@ export type Options = {
   title: string | null;
   /** BeatMontage: cut the picture every N measured beats. */
   beatsPerCut: number;
+  /** Titled: seconds a chapter card stays up at the start of each chapter (0 = no chapter cards). */
+  chapterSeconds: number;
+  /** Pip: which corner the camera sits in. */
+  pipCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  /** Pip: camera width as a fraction of the frame width (circle: of the short side). */
+  pipSize: number;
+  /** Pip: rounded rectangle or circle. */
+  pipShape: "rounded" | "circle";
+  /** Pip: play the camera's own audio too (off: the source's audio only). */
+  pipAudio: boolean;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -81,6 +124,25 @@ export const DEFAULT_OPTIONS: Options = {
   sceneTitles: [],
   title: null,
   beatsPerCut: 4,
+  chapterSeconds: 4,
+  pipCorner: "bottom-right",
+  pipSize: 0.28,
+  pipShape: "rounded",
+  pipAudio: false,
+};
+
+/** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */
+export const pipFrames = (p: Pip, fps: number, total: number): [number, number, number] => {
+  const from = Math.max(0, secToFrames(p.offset, fps));
+  const trimBefore = Math.max(0, secToFrames(-p.offset, fps));
+  const end = Math.min(total, secToFrames(p.offset + p.duration, fps));
+  return [from, Math.max(1, end - from), trimBefore];
+};
+
+/** [from, durationInFrames] of the card at the start of a chapter (Titled). render.py mirrors this. */
+export const chapterCardFrames = (c: Chapter, fps: number, seconds: number): [number, number] => {
+  const from = secToFrames(c.start, fps);
+  return [from, Math.max(1, Math.min(secToFrames(c.end, fps), from + Math.round(fps * seconds)) - from)];
 };
 
 /**

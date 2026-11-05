@@ -23,4 +23,7 @@ Test media is generated (lavfi test patterns and tones). Please keep sample text
 
 ## Releasing
 
-Bump `version` in `package.json` and add a `## X.Y.Z` section to `CHANGELOG.md` in the same PR; merging to main tags, publishes the GitHub Release and (with `NPM_TOKEN` set) publishes to npm.
+Releases are cut on a push to main:
+
+- **Automatically** when the current version is already tagged: label the PR `feature`/`enhancement`/`minor` (→ minor) or `fix`/`bug`/`patch` (→ patch), or, for a commit pushed straight to main, start its subject with `feat:` or `fix:`. The release job bumps `package.json` and `.claude-plugin/plugin.json`, writes the CHANGELOG section from those titles, tags, publishes the GitHub Release and npm. Changes with none of these (docs, ci, chore, unprefixed commits) release nothing. A `major` label or `BREAKING` in a subject is refused: bump that by hand.
+- **By hand**: bump `version` in both files and add a `## X.Y.Z` section to `CHANGELOG.md` in the same change; that version is released as written.

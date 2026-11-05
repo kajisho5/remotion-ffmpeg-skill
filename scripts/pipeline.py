@@ -28,10 +28,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project", required=True, help="Remotion project folder made by init.py")
     p.add_argument("--comp", required=True, help=f"composition id ({', '.join(BUILTIN_COMPOSITIONS)}, or yours)")
     p.add_argument("--captions", help="SRT / WebVTT / JSON cues for the timeline")
+    p.add_argument("--chapters", metavar="FILE|source",
+                   help="chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter "
+                        "markers in the deliverable")
     p.add_argument("--options", help="JSON options file passed to the composition")
+    p.add_argument("--brand", help="ffmpeg-skill brand.json: the look of the graphics and, on delivery, the logo")
     p.add_argument("--platform", choices=PLATFORMS, help="deliver with this ffmpeg-skill template and check it")
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
+    p.add_argument("--conform", action="store_true",
+                   help="a variable-frame-rate or HDR source is made into a constant-frame-rate, SDR BT.709 copy "
+                        "with ffmpeg-skill first (analyze.py --conform; the copy goes in --out-dir) and drawn on; "
+                        "without it such a source is refused")
     p.add_argument("--fast", action="store_true", help="preview-quality render")
     p.add_argument("--aspect", choices=["source", *ASPECTS],
                    help="output shape (default: the shape the --platform template delivers, else the source's)")
@@ -80,6 +88,8 @@ def main() -> None:
 
     an_args = [*map(str, inputs), "-o", str(tl)] + (["--joined", str(out_dir / f"{stem}.mp4")] if len(inputs) > 1 else [])
     an_args += (["--captions", a.captions] if a.captions else []) + (["--beats"] if a.beats else [])
+    an_args += ["--chapters", a.chapters] if a.chapters else []
+    an_args += ["--conform", "--conformed", str(out_dir / f"{stem}_conformed.mp4")] if a.conform else []
     analysis = step("measure", "analyze", an_args, steps)
     if STATE.dry_run and not tl.exists():
         emit({"output": None, "steps": steps,
@@ -97,14 +107,18 @@ def main() -> None:
     aspect = a.aspect or platform_aspect(a.platform)
     if aspect:
         r_args += ["--aspect", aspect]
-    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file)):
+    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file), ("--brand", a.brand)):
         if val is not None:
             r_args += [flag, str(val)]
     rendered = step("draw", "render", r_args, steps)
 
     delivered = None
     if a.platform:
-        delivered = step("deliver", "deliver", [str(render_out), "--platform", a.platform], steps)
+        de_args = [str(render_out), "--platform", a.platform] + (["--brand", a.brand] if a.brand else [])
+        # chapter markers only when the picture keeps the source's clock (cuts would move every chapter)
+        if a.chapters and a.chapters != "source" and a.comp not in ("Jumpcut", "Highlights"):
+            de_args += ["--chapters", a.chapters]
+        delivered = step("deliver", "deliver", de_args, steps)
 
     final = (delivered or {}).get("output") or rendered.get("output")
     look = rendered.get("look")

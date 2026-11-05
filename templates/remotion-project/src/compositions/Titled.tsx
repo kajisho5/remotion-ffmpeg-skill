@@ -2,12 +2,13 @@ import React from "react";
 import { AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
 import { useStagedFont } from "../lib/useStagedFont";
-import { Props, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
+import { Props, chapterCardFrames, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
 
 /**
- * Titled: the source, full length, with lower thirds the user wrote (options.lowerThirds) and a
- * title card at the start of each measured scene (options.sceneTitles, in scene order). The skill
- * places text where the measurements say; it never writes the text.
+ * Titled: the source, full length, with lower thirds the user wrote (options.lowerThirds), a
+ * title card at the start of each measured scene (options.sceneTitles, in scene order) and a
+ * chapter card at the start of each chapter (timeline.chapters, from analyze.py --chapters). The
+ * skill places text where the measurements say; it never writes the text.
  */
 export const Titled: React.FC<Props> = (props) => {
   const { timeline, options, font, overlay } = props;
@@ -30,6 +31,16 @@ export const Titled: React.FC<Props> = (props) => {
           </Sequence>
         );
       })}
+      {o.chapterSeconds > 0
+        ? (timeline.chapters ?? []).map((ch, i, all) => {
+            const [from, dur] = chapterCardFrames(ch, fps, o.chapterSeconds);
+            return (
+              <Sequence key={`c${i}`} from={from} durationInFrames={dur} name={`chapter ${i + 1}`} layout="none">
+                <ChapterCard title={ch.title} n={i + 1} of={all.length} len={dur} o={o} fontFamily={family} />
+              </Sequence>
+            );
+          })
+        : null}
       {o.lowerThirds.map((lt, i) => {
         const from = secToFrames(lt.start, fps);
         const dur = Math.max(1, secToFrames(lt.end, fps) - from);
@@ -104,6 +115,70 @@ const LowerThirdCard: React.FC<{ text: string; sub?: string; len: number; o: Opt
             {sub}
           </div>
         ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/** Top-left chip: the chapter's place in the list and its title, as written. */
+const ChapterCard: React.FC<{ title: string; n: number; of: number; len: number; o: Options; fontFamily: string }> = ({
+  title,
+  n,
+  of,
+  len,
+  o,
+  fontFamily,
+}) => {
+  const { width, height } = useVideoConfig();
+  const { enter, exit } = useInOut(len);
+  const short = Math.min(width, height);
+  const size = Math.round(short * 0.042);
+  const portrait = height > width;
+  return (
+    <AbsoluteFill
+      style={{
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        padding: `${height * (portrait ? 0.1 : 0.06)}px 0 0 ${width * 0.05}px`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          maxWidth: width * 0.8,
+          fontFamily,
+          opacity: exit,
+          transform: `translateX(${(1 - enter) * -width * 0.06}px)`,
+        }}
+      >
+        <div
+          style={{
+            background: o.accent,
+            color: "#111",
+            fontWeight: 800,
+            fontSize: Math.round(size * 0.7),
+            padding: `${size * 0.3}px ${size * 0.4}px`,
+            display: "flex",
+            alignItems: "center",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {n}/{of}
+        </div>
+        <div
+          style={{
+            background: "rgba(0,0,0,0.68)",
+            color: o.textColor,
+            fontWeight: 700,
+            fontSize: size,
+            padding: `${size * 0.22}px ${size * 0.55}px`,
+            whiteSpace: "pre-wrap",
+            textWrap: "balance",
+          }}
+        >
+          {title}
+        </div>
       </div>
     </AbsoluteFill>
   );

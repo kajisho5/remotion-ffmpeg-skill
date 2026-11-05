@@ -9,6 +9,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import _captions  # noqa: E402
 import _common  # noqa: E402
+import _sparse  # noqa: E402
+import analyze  # noqa: E402
 import render  # noqa: E402
 
 
@@ -47,6 +49,117 @@ class Captions(unittest.TestCase):
             _captions.parse_json_cues('[{"start": 2, "end": 1, "text": "x"}]')
 
 
+class Words(unittest.TestCase):
+    WHISPER = ('{"segments": [{"words": [{"word": " Hello", "start": 0.0, "end": 0.4}, {"word": " there.", "start": 0.4, '
+               '"end": 0.9}]}, {"words": [{"word": " Next", "start": 2.0, "end": 2.3}, {"word": " part", "start": 2.3, "end": 2.7}]}]}')
+
+    def test_whisper_layout_keeps_engine_spacing(self):
+        words = _captions.parse_words(self.WHISPER)
+        self.assertEqual([w["text"] for w in words], [" Hello", " there.", " Next", " part"])
+
+    def test_plain_list_and_text_key(self):
+        words = _captions.parse_words('[{"text": "これは", "start": 1, "end": 1.4}, {"text": "字幕", "start": 1.4, "end": 2}]')
+        self.assertEqual("".join(w["text"] for w in words), "これは字幕")
+
+    def test_grouping_is_mechanical_and_lossless(self):
+        words = _captions.parse_words(self.WHISPER)
+        cues = _captions.cues_from_words(words)
+        self.assertEqual([c["text"] for c in cues], ["Hello there.", "Next part"])  # split at the 1.1 s pause
+        self.assertEqual("".join(c["text"] for c in cues).replace(" ", ""),
+                         "".join(w["text"] for w in words).replace(" ", ""))
+
+    def test_no_words_is_an_error(self):
+        with self.assertRaises(_captions.CaptionError):
+            _captions.parse_words('{"segments": [{"text": "no word timestamps"}]}')
+
+
+class Transcript(unittest.TestCase):
+    """--words with a transcription-skill transcript (tests/fixtures/transcript.json)."""
+
+    def setUp(self):
+        import json
+        self.json = json
+        self.doc = json.loads((ROOT / "tests" / "fixtures" / "transcript.json").read_text(encoding="utf-8"))
+
+    def test_fixture_is_valid_and_read_as_transcript(self):
+        self.assertEqual(_captions.validate_transcript(self.doc), [])
+        r = _captions.read_word_timings(ROOT / "tests" / "fixtures" / "transcript.json")
+        self.assertIsNotNone(r["cues"])
+
+    def test_times_are_never_invented(self):
+        r = _captions.parse_transcript(self.doc)
+        given = {(w["start"], w["end"]) for seg in self.doc["segments"] for w in seg["words"] or []}
+        self.assertEqual({(w["start"], w["end"]) for w in r["words"]}, given)
+        bounds = {t for seg in self.doc["segments"] for t in (seg["start"], seg["end"])} | {t for p in given for t in p}
+        for c in r["cues"]:
+            self.assertIn(c["start"], bounds)
+            self.assertIn(c["end"], bounds)
+
+    def test_japanese_without_spaces_and_english_spacing_from_raw_text(self):
+        r = _captions.parse_transcript(self.doc)
+        self.assertEqual("".join(w["text"] for w in r["words"][:6]), "本日の講演を始めます。")
+        self.assertEqual([w["text"] for w in r["words"][6:8]], [" Welcome", " to"])
+        # cues joined back give each segment's text exactly: nothing added, dropped or reworded
+        self.assertEqual([c["text"] for c in r["cues"]][:2], [s["text"] for s in self.doc["segments"][:2]])
+        self.assertEqual(" ".join(c["text"] for c in r["cues"][2:]), self.doc["segments"][2]["text"])
+
+    def test_segment_without_word_timings_is_one_plain_cue(self):
+        r = _captions.parse_transcript(self.doc)
+        self.assertIn({"start": 3.2, "end": 4.5, "text": "Inside the silence."}, r["cues"])
+        self.assertFalse(any(3.2 <= w["start"] < 4.5 for w in r["words"]))
+
+    def test_words_that_do_not_spell_the_text_are_not_trusted(self):
+        self.doc["segments"][0]["words"][2]["text"] = "公園"
+        r = _captions.parse_transcript(self.doc)
+        self.assertEqual(r["cues"][0], {"start": 0.3, "end": 2.8, "text": "本日の講演を始めます。"})
+        self.assertFalse(any(w["start"] < 2.8 for w in r["words"]))
+        self.assertTrue(any("do not spell" in w for w in r["warnings"]))
+
+    def test_unknown_versions_are_refused(self):
+        for schema in ("transcription-skill/transcript/0.2", "transcription-skill/transcript/1.0",
+                       "transcription-skill/speech-event/0.1", "something/else", None):
+            with self.subTest(schema=schema):
+                with self.assertRaisesRegex(_captions.CaptionError, "unsupported transcript schema"):
+                    _captions.parse_transcript(dict(self.doc, schema=schema))
+
+    def test_contract_violations_are_refused(self):
+        def broken(fn):
+            doc = self.json.loads(self.json.dumps(self.doc))
+            fn(doc)
+            return doc
+        cases = {
+            "missing field": lambda d: d.pop("source"),
+            "word missing confidence": lambda d: d["segments"][0]["words"][0].pop("confidence"),
+            "backwards word": lambda d: d["segments"][0]["words"][1].update(start=0.9, end=0.8),
+            "word outside segment": lambda d: d["segments"][0]["words"][-1].update(end=3.0),
+            "overlapping segments": lambda d: d["segments"][1].update(start=2.0),
+            "segment past the end": lambda d: d["segments"][2].update(end=9.0),
+            "NaN time": lambda d: d["segments"][0].update(start=float("nan")),
+            "bool time": lambda d: d["segments"][0]["words"][0].update(start=True),
+            "confidence > 1": lambda d: d["segments"][0].update(confidence=1.5),
+            "bad fingerprint": lambda d: d["source"].update(fingerprint="md5:00"),
+            "duration mismatch": lambda d: d["source"].update(media_duration=9.0),
+            "other producer": lambda d: d["provenance"].update(skill="another-skill"),
+        }
+        for name, fn in cases.items():
+            with self.subTest(name):
+                with self.assertRaises(_captions.CaptionError):
+                    _captions.parse_transcript(broken(fn))
+
+    def test_no_segments_is_an_error(self):
+        with self.assertRaisesRegex(_captions.CaptionError, "no speech"):
+            _captions.parse_transcript(dict(self.doc, segments=[]))
+
+    def test_whisper_json_still_read_as_before(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "whisper.json"
+            f.write_text(Words.WHISPER, encoding="utf-8")
+            r = _captions.read_word_timings(f)
+        self.assertIsNone(r["cues"])   # grouped later, only without --captions -- as before
+        self.assertEqual(r["words"], _captions.parse_words(Words.WHISPER))
+
+
 class Frames(unittest.TestCase):
     def test_round_half_up_like_javascript(self):
         self.assertEqual(_common.sec_to_frames(3.15, 30), 95)   # 94.5 -> 95 (Python round() would give 94)
@@ -64,6 +177,7 @@ class Frames(unittest.TestCase):
         t = timeline(highlights=[{"start": 1.0, "end": 2.5}, {"start": 5.0, "end": 6.0}])
         self.assertEqual(_common.expected_frames("Titled", t), 240)
         self.assertEqual(_common.expected_frames("BeatMontage", t), 240)
+        self.assertEqual(_common.expected_frames("Karaoke", t), 240)
         self.assertEqual(_common.expected_frames("Highlights", t), 45 + 30)
         self.assertEqual(_common.expected_frames("Highlights", timeline()), 240)  # none ranked: whole file
 
@@ -91,9 +205,17 @@ class RemotionErrors(unittest.TestCase):
         self.assertEqual(_common.remotion_error(log), "Error  Error: Could not find composition with ID Nope.")
 
 
+class RemotionErrorsWithoutMarker(unittest.TestCase):
+    def test_keeps_the_error_line_not_the_stack(self):
+        log = ("Error: concurrency is set higher than the amount of CPU cores available. Available CPU cores: 2\n"
+               "    at render (/x/render.js:166:40)\n    at cli (/x/index.js:121:39)\n")
+        self.assertIn("concurrency is set higher", _common.remotion_error(log))
+        self.assertNotIn("render.js", _common.remotion_error(log))
+
+
 class RenderCommand(unittest.TestCase):
     def ns(self, **kw):
-        base = dict(codec="h264", crf=None, frames=None, fast=False, concurrency=None)
+        base = dict(codec="h264", crf=None, frames=None, fast=False, concurrency="100%")
         base.update(kw)
         return argparse.Namespace(**base)
 
@@ -101,7 +223,7 @@ class RenderCommand(unittest.TestCase):
         cmd = render.remotion_render_cmd(Path("/p"), "Jumpcut", Path("/o.mp4"), Path("/p/.rfs/x.json"), self.ns(fast=True))
         self.assertIn("--scale=0.5", cmd)
         self.assertIn("--crf=28", cmd)
-        self.assertEqual(cmd[1:5], ["render", "src/index.ts", "Jumpcut", "/o.mp4"])
+        self.assertEqual(cmd[1:5], ["render", "src/index.ts", "Jumpcut", str(Path("/o.mp4"))])
 
     def test_prores(self):
         cmd = render.remotion_render_cmd(Path("/p"), "Captioned", Path("/o.mov"), Path("/x.json"), self.ns(codec="prores", crf=10))
@@ -207,5 +329,214 @@ class TemplateParity(unittest.TestCase):
             self.assertIn(f'id="{comp}"', root)
 
 
+class Brand(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.d = Path(tempfile.mkdtemp(prefix="rfs-brand-"))
+        (self.d / "fonts").mkdir()
+        (self.d / "fonts" / "House.ttf").write_bytes(b"\0")
+
+    def write(self, data):
+        p = self.d / "brand.json"
+        p.write_text(__import__("json").dumps(data), encoding="utf-8")
+        return str(p)
+
+    def test_only_what_the_file_states(self):
+        opts, ff, notes = _common.brand_look(self.write({
+            "colors": {"primary": "E53935", "text": "#f5f5f5"}, "font": "House Sans",
+            "font_file": "fonts/House.ttf", "logo": "logo.png",
+            "styles": {"caption": {"colour": "0xFFEE00", "size": 30}}}))
+        self.assertEqual(opts["accent"], "#E53935")
+        self.assertEqual(opts["textColor"], "#FFEE00")  # the caption colour wins over colors.text
+        self.assertTrue(opts["fontFamily"].startswith("'House Sans', 'Noto Sans JP'"))
+        self.assertEqual(ff, str((self.d / "fonts" / "House.ttf").resolve()))
+        self.assertTrue(any("logo" in n for n in notes) and any("size" in n for n in notes))
+        self.assertEqual(_common.validate_options(opts), [])
+        self.assertEqual(_common.brand_look(self.write({"loudness": {"lufs": -16}}))[0], {})
+
+    def test_options_win_and_font_file_flag_wins(self):
+        a = argparse.Namespace(options=None, brand=self.write({"colors": {"primary": "112233"},
+                                                                 "font_file": "fonts/House.ttf"}),
+                               font_file="/explicit.ttf")
+        opt = self.d / "o.json"
+        opt.write_text('{"accent": "#000000"}', encoding="utf-8")
+        a.options = str(opt)
+        self.assertEqual(_common.load_look(a)["accent"], "#000000")
+        self.assertEqual(a.font_file, "/explicit.ttf")
+
+    def test_bad_colour_is_refused(self):
+        with self.assertRaises(SystemExit):
+            _common.brand_look(self.write({"colors": {"primary": "red"}}))
+
+    def test_font_stack_matches_typescript(self):
+        ts = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/timeline.ts").read_text()
+        self.assertIn(f'fontFamily: "{_common.DEFAULT_FONT_STACK}",', ts)
+
+
+class PipOptions(unittest.TestCase):
+    def test_valid_and_refused(self):
+        self.assertEqual(_common.validate_options({"pipCorner": "top-left", "pipSize": 0.2, "pipShape": "circle",
+                                                   "pipAudio": True}), [])
+        for bad in ({"pipCorner": "middle"}, {"pipShape": "square"}, {"pipSize": 0.9}, {"pipAudio": "yes"}):
+            with self.subTest(bad=bad):
+                self.assertTrue(_common.validate_options(bad))
+
+    def test_pip_is_full_length(self):
+        t = {"source": {"fps": 30.0, "duration": 10.0}}
+        self.assertEqual(_common.expected_frames("Pip", t), 300)
+
+    def test_timeline_pip_shape_is_checked(self):
+        base = {"schema": _common.TIMELINE_SCHEMA, "source": {"duration": 1, "fps": 30, "width": 2, "height": 2}}
+        self.assertEqual(_common.validate_timeline({**base, "pip": None}), [])
+        self.assertTrue(_common.validate_timeline({**base, "pip": {"offset": "x"}}))
+
+
+class Chapters(unittest.TestCase):
+    def test_youtube_format_kept_as_written(self):
+        ch = _captions.parse_chapters("0:00 Intro\n1:05 - Setup and tools\n# comment\n\n1:02:03.5 Q&A\n", 4000)
+        self.assertEqual([(c["start"], c["title"]) for c in ch], [(0, "Intro"), (65, "Setup and tools"), (3723.5, "Q&A")])
+        self.assertEqual([c["end"] for c in ch], [65, 3723.5, 4000])
+
+    def test_refusals(self):
+        for text in ("0:00\n", "1:00 B\n0:30 A\n", "0:00 A\n99:00 B\n", "x Intro\n", "", "1:2:3:4 A\n"):
+            with self.subTest(text=text), self.assertRaises(_captions.CaptionError):
+                _captions.parse_chapters(text, 600)
+
+    def test_youtube_rules_are_warnings(self):
+        ok = _captions.parse_chapters("0:00 A\n0:10 B\n0:20 C\n", 30)
+        self.assertEqual(_captions.youtube_chapter_warnings(ok), [])
+        bad = _captions.parse_chapters("0:05 A\n0:09 B\n", 30)
+        w = " ".join(_captions.youtube_chapter_warnings(bad))
+        self.assertIn("0:00", w)
+        self.assertIn("three", w)
+        self.assertIn("10 s", w)
+
+    def test_option_and_parity(self):
+        self.assertEqual(_common.validate_options({"chapterSeconds": 3}), [])
+        self.assertTrue(_common.validate_options({"chapterSeconds": -1}))
+        ts = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/timeline.ts").read_text()
+        self.assertIn(f"chapterSeconds: {_sparse.CHAPTER_SECONDS:g},", ts)
+
+
+class Sparse(unittest.TestCase):
+    T = {"source": {"fps": 30.0, "duration": 60.0},
+         "captions": [{"start": 1, "end": 3, "text": "a"}, {"start": 3.5, "end": 5, "text": "b"},
+                      {"start": 30, "end": 32, "text": "c"}],
+         "words": [{"start": 1.01, "end": 1.4, "text": " a"}, {"start": 29.99, "end": 30.6, "text": " c"}],
+         "scenes": [{"start": 0, "end": 60}], "peaks": [{"time": 10, "rms": 0.5}]}
+
+    def test_close_cues_share_a_stretch(self):
+        self.assertEqual(_sparse.caption_stretches(self.T, 2.0), [(30, 150), (900, 960)])
+        self.assertEqual(_sparse.caption_stretches(self.T, 0.0), [(30, 90), (105, 150), (900, 960)])
+
+    def test_packed_back_to_back_with_one_blank_frame(self):
+        packed, _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        self.assertEqual(layout, [(0, 120, 30), (121, 60, 900)])
+        self.assertEqual(_sparse.packed_frames(layout), 181)
+        self.assertEqual(_common.sec_to_frames(packed["source"]["duration"], 30.0), 181)
+        self.assertEqual([_common.sec_to_frames(c["start"], 30.0) for c in packed["captions"]], [0, 75, 121])
+        self.assertEqual(packed["scenes"], [])
+        self.assertEqual(packed["peaks"], [])
+
+    def test_shift_is_whole_frames_so_sub_frame_word_times_survive(self):
+        packed, _, _ = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        w0, w1 = packed["words"]
+        self.assertAlmostEqual(w0["start"] * 30, 1.01 * 30 - 30, places=6)
+        # a word starting just before its cue still goes with it (Karaoke assigns words by midpoint)
+        self.assertAlmostEqual(w1["start"] * 30, 29.99 * 30 - (900 - 121), places=6)
+
+    def test_place_ranges_sit_half_a_frame_inside(self):
+        _, _, layout = _sparse.pack(self.T, _sparse.caption_stretches(self.T, 2.0))
+        self.assertEqual(_sparse.place_args(layout, 30.0),
+                         ["--place", "0.000000-3.983333@1.000000", "--place", "4.016667-6.016667@30.000000"])
+
+    def test_titled_moves_lower_thirds_and_titled_scene_cards(self):
+        t = {"source": {"fps": 30.0, "duration": 60.0}, "captions": [],
+             "scenes": [{"start": 0, "end": 20}, {"start": 20, "end": 21}, {"start": 21, "end": 60}]}
+        o = {"sceneTitles": ["", "Part two", "Part three"],
+             "lowerThirds": [{"text": "Name", "sub": "Role", "start": 40, "end": 44}]}
+        spans = _sparse.plan_stretches("Titled", t, o, 0.0)
+        # scene 2: 1 s scene -> 1 s card, touching scene 3's card (capped at 2.5 s); the lower third;
+        # scene 1 has no title and draws nothing
+        self.assertEqual(spans, [(600, 705), (1200, 1320)])
+        spans = _sparse.plan_stretches("Titled", t, o, 2.0)
+        self.assertEqual(spans, [(600, 705), (1200, 1320)])
+        tl, opts, layout = _sparse.pack(t, spans, o)
+        self.assertEqual(layout, [(0, 105, 600), (106, 120, 1200)])
+        self.assertEqual(len(tl["scenes"]), 3)  # matched to sceneTitles by index
+        self.assertEqual([_common.sec_to_frames(x, 30.0) for x in (tl["scenes"][1]["start"], tl["scenes"][1]["end"])], [0, 30])
+        self.assertEqual([_common.sec_to_frames(x, 30.0) for x in (tl["scenes"][2]["start"], tl["scenes"][2]["end"])], [30, 105])
+        self.assertEqual(_common.sec_to_frames(opts["lowerThirds"][0]["start"], 30.0), 106)
+        self.assertEqual(opts["lowerThirds"][0]["text"], "Name")
+        self.assertEqual(o["lowerThirds"][0]["start"], 40)  # the caller's options are not changed
+
+    def test_chapter_cards_are_drawn_and_moved(self):
+        t = {"source": {"fps": 30.0, "duration": 100.0}, "captions": [], "scenes": [],
+             "chapters": [{"start": 0, "end": 2, "title": "A"}, {"start": 2, "end": 50, "title": "B"},
+                          {"start": 50, "end": 100, "title": "C"}]}
+        spans = _sparse.plan_stretches("Titled", t, {}, 0.0)
+        self.assertEqual(spans, [(0, 180), (1500, 1620)])  # A (2 s) touches B's 4 s card
+        tl, _, layout = _sparse.pack(t, spans, {})
+        self.assertEqual([_common.sec_to_frames(c["start"], 30.0) for c in tl["chapters"]], [0, 60, 181])
+        self.assertEqual([_common.sec_to_frames(c["end"], 30.0) for c in tl["chapters"]], [60, 180, 301])
+        self.assertEqual([c["title"] for c in tl["chapters"]], ["A", "B", "C"])
+        self.assertEqual(_sparse.plan_stretches("Titled", t, {"chapterSeconds": 0}, 0.0), [])
+
+    def test_scene_card_length_matches_titled_tsx(self):
+        tsx = (Path(__file__).resolve().parent.parent / "templates/remotion-project/src/compositions/Titled.tsx").read_text()
+        self.assertIn(f"Math.round(fps * {_sparse.SCENE_CARD_SECONDS:g})", tsx)
+
+    def test_cue_past_the_end_is_kept_inside(self):
+        t = {"source": {"fps": 30.0, "duration": 2.0}, "captions": [{"start": 1.5, "end": 9, "text": "x"}]}
+        self.assertEqual(_sparse.caption_stretches(t, 2.0), [(45, 60)])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class Conform(unittest.TestCase):
+    """VFR / HDR sources are conformed (--conform) or refused; nothing only warns."""
+
+    def probe(self, **video):
+        return {"duration": 4.0, "video": {"fps": 30.0, "r_frame_rate": "30/1", "avg_frame_rate": "30/1",
+                                           "variable_frame_rate_suspected": False, "hdr": False,
+                                           "hdr_signal": False, "bt2020_or_hdr": False, **video}}
+
+    def test_what_needs_conforming(self):
+        self.assertEqual(analyze.conform_needs(self.probe()), [])
+        self.assertEqual(analyze.conform_needs(self.probe(variable_frame_rate_suspected=True)), ["vfr"])
+        for tags in ({"hdr": True, "hdr_signal": True, "bt2020_or_hdr": True},   # PQ / HLG / Dolby Vision
+                     {"bt2020_or_hdr": True}):                                    # BT.2020 primaries on SDR
+            self.assertEqual(analyze.conform_needs(self.probe(**tags)), ["hdr"])
+        both = self.probe(variable_frame_rate_suspected=True, hdr=True, bt2020_or_hdr=True)
+        self.assertEqual(analyze.conform_needs(both), ["vfr", "hdr"])
+        self.assertEqual(analyze.conform_needs({"audio": {"codec": "aac"}}), [])   # audio only: nothing to draw
+
+    def test_vfr_or_hdr_is_never_only_a_warning(self):
+        for tags in ({"variable_frame_rate_suspected": True}, {"hdr": True, "bt2020_or_hdr": True}):
+            self.assertEqual(analyze.warnings_for(self.probe(**tags)), [])
+
+    def test_rate_keeps_every_frame(self):
+        vfr = {"r_frame_rate": "30/1", "avg_frame_rate": "280/13", "fps": 21.538}
+        self.assertEqual(analyze.conform_rate(vfr, None), 30.0)          # the base grid, not the average
+        self.assertEqual(analyze.conform_rate(vfr, 25.0), 25.0)          # --conform-fps wins
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": "30000/1001", "fps": 29.9}, None), 29.97)
+        # a timebase-like base rate (screen recorders) is no frame grid: fall back to the average
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": "1000/1", "fps": 29.99}, None), 30.0)
+        self.assertEqual(analyze.conform_rate({"r_frame_rate": None, "fps": None}, None), 30.0)
+
+    def test_plan_order_and_outputs(self):
+        src, out, tmp = Path("/m/a.mov"), Path("/m/a_conformed.mp4"), Path("/m/.t/cfr.mp4")
+        v = {"r_frame_rate": "30/1"}
+        self.assertEqual(analyze.conform_plan(src, v, ["vfr"], out, tmp, None),
+                         [("vfr", "fit", [str(src), "--fps", "30", "-o", str(out)])])
+        self.assertEqual(analyze.conform_plan(src, v, ["hdr"], out, tmp, None),
+                         [("hdr", "color", [str(src), "--to-sdr", "-o", str(out)])])
+        # VFR first (color.py would otherwise conform to the average rate itself), then one tone map
+        self.assertEqual(analyze.conform_plan(src, v, ["vfr", "hdr"], out, tmp, 24.0),
+                         [("vfr", "fit", [str(src), "--fps", "24", "-o", str(tmp)]),
+                          ("hdr", "color", [str(tmp), "--to-sdr", "-o", str(out)])])
+        for _, _, args in analyze.conform_plan(src, v, ["vfr", "hdr"], out, tmp, None):
+            self.assertNotEqual(args[0], str(out))   # the original is only ever read
+

@@ -1,0 +1,83 @@
+[
+  {
+    "task": "graphics-layer-for-editor",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; captions=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mov",
+          "alpha": true
+        },
+        "ok": true,
+        "detail": "talk_captioned.graphics.mov: 1280x720 8.00s yuva444p12le"
+      },
+      {
+        "check": {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        },
+        "ok": true,
+        "detail": "unchanged"
+      }
+    ]
+  },
+  {
+    "task": "join-then-titles",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "clips": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; clips=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 19.5
+        },
+        "ok": true,
+        "detail": "joined_with_titles.mp4: 1280x720 20.01s yuv420p"
+      }
+    ]
+  },
+  {
+    "task": "karaoke-from-words",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "min_words": 5
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; words=11"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 7.5,
+          "max_duration": 8.5
+        },
+        "ok": true,
+        "detail": "talk_karaoke.mp4: 1280x720 8.00s yuv420p"
+      }
+    ]
+  }
+]

@@ -1,0 +1,155 @@
+{
+  "schema": "transcription-skill/transcript/0.1",
+  "id": "tr_0f1e2d3c4b5a",
+  "asset_id": "asset_0123456789abcdef",
+  "language": "ja",
+  "language_source": "requested",
+  "language_confidence": null,
+  "duration": 8.0,
+  "segments": [
+    {
+      "id": "seg_0001",
+      "start": 0.3,
+      "end": 2.8,
+      "text": "本日の講演を始めます。",
+      "raw_text": "本日の講演を始めます。",
+      "confidence": 0.81,
+      "words": [
+        {
+          "start": 0.3,
+          "end": 0.7,
+          "text": "本日",
+          "confidence": 0.9
+        },
+        {
+          "start": 0.7,
+          "end": 0.86,
+          "text": "の",
+          "confidence": 0.9
+        },
+        {
+          "start": 0.86,
+          "end": 1.4,
+          "text": "講演",
+          "confidence": 0.9
+        },
+        {
+          "start": 1.4,
+          "end": 1.56,
+          "text": "を",
+          "confidence": 0.9
+        },
+        {
+          "start": 1.56,
+          "end": 2.1,
+          "text": "始め",
+          "confidence": 0.9
+        },
+        {
+          "start": 2.1,
+          "end": 2.8,
+          "text": "ます。",
+          "confidence": 0.9
+        }
+      ],
+      "speaker_id": null
+    },
+    {
+      "id": "seg_0002",
+      "start": 3.2,
+      "end": 4.5,
+      "text": "Inside the silence.",
+      "raw_text": " Inside the silence.",
+      "confidence": 0.42,
+      "words": null,
+      "speaker_id": null
+    },
+    {
+      "id": "seg_0003",
+      "start": 5.2,
+      "end": 7.6,
+      "text": "Welcome to the first session. Thanks.",
+      "raw_text": " Welcome to the first session. Thanks.",
+      "confidence": 0.77,
+      "words": [
+        {
+          "start": 5.2,
+          "end": 5.6,
+          "text": "Welcome",
+          "confidence": 0.9
+        },
+        {
+          "start": 5.6,
+          "end": 5.74,
+          "text": "to",
+          "confidence": 0.9
+        },
+        {
+          "start": 5.74,
+          "end": 5.9,
+          "text": "the",
+          "confidence": 0.9
+        },
+        {
+          "start": 5.9,
+          "end": 6.3,
+          "text": "first",
+          "confidence": 0.9
+        },
+        {
+          "start": 6.3,
+          "end": 6.4,
+          "text": "session.",
+          "confidence": 0.9
+        },
+        {
+          "start": 7.2,
+          "end": 7.6,
+          "text": "Thanks.",
+          "confidence": null
+        }
+      ],
+      "speaker_id": null
+    }
+  ],
+  "source": {
+    "filename": "fixture.mp4",
+    "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 123456,
+    "media_duration": 8.0,
+    "audio_channels": 1,
+    "sample_rate": 44100,
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "has_video": true
+  },
+  "engine": "faster_whisper",
+  "engine_version": "1.2.1",
+  "created_at": "2026-10-30T00:00:00Z",
+  "provenance": {
+    "engine": "faster_whisper",
+    "engine_version": "1.2.1",
+    "execution_mode": "local",
+    "model": "base",
+    "model_version": null,
+    "parameters": {
+      "language": "ja",
+      "beam_size": 5,
+      "temperature": 0.0,
+      "word_timestamps": true,
+      "initial_prompt": null,
+      "audio_stream": 0
+    },
+    "parameters_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "cache_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "created_at": "2026-10-30T00:00:00Z",
+    "processing_seconds": 1.5,
+    "skill_version": "0.7.3",
+    "skill": "transcription-skill",
+    "tool": "transcription/transcribe",
+    "language_detection": null,
+    "audio_extraction": null
+  },
+  "warnings": [
+    "seg_0002: word timestamps discarded (non-positive word duration at 3.40)"
+  ]
+}

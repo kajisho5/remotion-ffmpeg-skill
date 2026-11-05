@@ -3,27 +3,71 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # ffmpeg-skill main on every OS, plus its 3.0.0 release pinned by commit on Linux
+        ffmpeg_skill: [{name: main, ref: main}]
+        include:
+          - os: ubuntu-latest
+            ffmpeg_skill: {name: "3.0.0", ref: 1dc2f52013956daa1d97fd9d9d53c79b9305bc43}
+    runs-on: ${{ matrix.os }}
+    name: test (${{ matrix.os }}, ffmpeg-skill ${{ matrix.ffmpeg_skill.name }})
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: kajisho5/ffmpeg-skill
-          path: ffmpeg-skill
-      - uses: actions/setup-python@v5
+          ref: ${{ matrix.ffmpeg_skill.ref }}
+          path: _ffmpeg-skill
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Python tests
+
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        # Homebrew's plain `ffmpeg` has no drawtext/libass (ffmpeg-skill's contact sheets and captions
+        # need them); `ffmpeg-full` does. It is keg-only: put it on PATH.
+        run: |
+          brew install ffmpeg-full
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Unit, contract and media tests (no renders)
         env:
-          FFMPEG_SKILL_DIR: ${{ github.workspace }}/ffmpeg-skill
+          FFMPEG_SKILL_DIR: ${{ github.workspace }}/_ffmpeg-skill
+          PYTHONUTF8: "1"
         run: python -m unittest discover -s tests -v
-      - name: Typecheck the Remotion template
-        working-directory: templates/remotion-project
-        run: npm install --no-audit --no-fund && npx tsc --noEmit
+
+      - name: Remotion project + typecheck
+        run: |
+          python scripts/init.py "$RUNNER_TEMP/rfs-project" --install
+          cd "$RUNNER_TEMP/rfs-project" && npx tsc --noEmit
+
+      - name: Real renders (every composition, portrait, overlay)
+        env:
+          FFMPEG_SKILL_DIR: ${{ github.workspace }}/_ffmpeg-skill
+          RFS_PROJECT: ${{ runner.temp }}/rfs-project
+          PYTHONUTF8: "1"
+        run: python -m unittest tests.test_integration -v

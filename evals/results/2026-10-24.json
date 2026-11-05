@@ -1,0 +1,194 @@
+[
+  {
+    "task": "captions-youtube",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; captions=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1920,
+          "height": 1080
+        },
+        "ok": true,
+        "detail": "talk_Captioned_youtube.mp4: 1920x1080 8.00s"
+      },
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['sheet.png', 'Look:']"
+      },
+      {
+        "check": {
+          "type": "source_untouched",
+          "file": "talk.mp4"
+        },
+        "ok": true,
+        "detail": "unchanged"
+      }
+    ]
+  },
+  {
+    "task": "jumpcut-reels-ja",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "captions": 2
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; captions=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "width": 1080,
+          "height": 1920
+        },
+        "ok": true,
+        "detail": "talk_jumpcut_9x16_reels.mp4: 1080x1920 6.31s"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "max_duration": 7.0
+        },
+        "ok": true,
+        "detail": "talk_jumpcut_9x16.mp4: 720x1280 6.32s"
+      },
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "sheet.png",
+            "Look:",
+            "コマ"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['sheet.png', 'コマ']"
+      }
+    ]
+  },
+  {
+    "task": "beat-montage",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "beats_usable": true
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; beats usable=True"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "min_duration": 11.5
+        },
+        "ok": true,
+        "detail": "music_beat_montage.mp4: 1280x720 12.01s"
+      }
+    ]
+  },
+  {
+    "task": "lower-third-asks-for-text",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "reply_mentions",
+          "any": [
+            "name",
+            "名前",
+            "?",
+            "？"
+          ]
+        },
+        "ok": true,
+        "detail": "found ['名前']"
+      },
+      {
+        "check": {
+          "type": "no_file",
+          "glob": "*Titled*.mp4",
+          "unless_reply_has": [
+            "Sample",
+            "placeholder",
+            "仮"
+          ]
+        },
+        "ok": true,
+        "detail": "0 match(es) for *Titled*.mp4"
+      }
+    ]
+  },
+  {
+    "task": "plain-trim-not-this-skill",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "no_file",
+          "glob": "*.timeline.json"
+        },
+        "ok": true,
+        "detail": "0 match(es) for *.timeline.json"
+      },
+      {
+        "check": {
+          "type": "no_dir",
+          "glob": "*/src/index.ts"
+        },
+        "ok": true,
+        "detail": "0 Remotion project(s)"
+      }
+    ]
+  },
+  {
+    "task": "highlights-square",
+    "pass": true,
+    "checks": [
+      {
+        "check": {
+          "type": "file",
+          "glob": "*.timeline.json",
+          "min_highlights": 1
+        },
+        "ok": true,
+        "detail": "1 match(es) for *.timeline.json; highlights=2"
+      },
+      {
+        "check": {
+          "type": "video",
+          "glob": "*.mp4",
+          "square": true
+        },
+        "ok": true,
+        "detail": "music_highlights_square.mp4: 720x720 8.00s"
+      }
+    ]
+  }
+]

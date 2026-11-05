@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -221,7 +222,10 @@ def validate_timeline(t: Any) -> List[str]:
             v = src.get(k)
             if not isinstance(v, (int, float)) or v <= 0:
                 p.append(f"source.{k} must be a positive number")
-    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights"):
+    if t.get("pip") is not None and not (isinstance(t["pip"], dict) and isinstance(t["pip"].get("offset"), (int, float))
+                                         and t["pip"].get("path")):
+        p.append("pip must be {path, offset, duration, ...} (analyze.py --pip)")
+    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words", "chapters"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
     for i, c in enumerate(t.get("captions", []) or []):
@@ -250,7 +254,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -264,7 +268,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 
 # ---------------------------------------------------------------- Remotion project
 
-BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage")
+BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -293,7 +297,11 @@ def remotion_error(text: str, limit: int = 15) -> str:
     for i, ln in enumerate(lines):
         if "An error occurred" in ln:
             return "\n".join(ln2.strip() for ln2 in lines[i + 1:i + 1 + limit])
-    return "\n".join(lines[-limit:])
+    # No marker: the Error lines themselves, without the JavaScript stack frames under them.
+    errors = [ln.strip() for ln in lines if "Error" in ln and not ln.lstrip().startswith("at ")]
+    if errors:
+        return "\n".join(errors[-limit:])
+    return "\n".join(ln for ln in lines if not ln.lstrip().startswith("at "))[-4000:] or "\n".join(lines[-limit:])
 
 
 def stage_source(project: Path, source_path: str) -> str:
@@ -324,7 +332,8 @@ def _stage(project: Path, src: Path, folder: str) -> str:
         os.link(src, dst)
     except OSError:
         info(f"copying {src.name} into the project (hard link not possible across drives) ...")
-        shutil.copy2(src, dst)
+        # Bytes only: copying a macOS system font's file flags (copy2 -> chflags) is not permitted.
+        shutil.copyfile(src, dst)
     return rel
 
 
@@ -449,6 +458,8 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
     src = t["source"].get("path")
     has_media = t["source"].get("has_video", True) or t["source"].get("has_audio", False)
     t["source"]["src"] = stage_source(project, src) if src and has_media and not overlay else None
+    if t.get("pip") and comp == "Pip":
+        t["pip"]["src"] = stage_source(project, t["pip"]["path"])
     props = {"timeline": t, "options": options, "frame": frame, "font": font, "overlay": overlay}
     # Named by content: two renders running at once (different sources, shapes or options) never
     # overwrite each other's props, and identical props share one file harmlessly.
@@ -468,6 +479,8 @@ def add_frame_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--fit", choices=FITS, help="how the source fills another shape: blur (default when the shape "
                                                 "changes), contain (bars) or cover (crop)")
     g.add_argument("--font-file", help="caption font file (.ttf/.otf/.ttc/.woff2), staged into the project")
+    g.add_argument("--brand", help="ffmpeg-skill brand.json: its colours, caption colour, font and font file set "
+                                   "the look (an --options file still wins key by key)")
     g.add_argument("--no-auto-font", action="store_true",
                    help="don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions")
 
@@ -481,6 +494,78 @@ def prepare_props(project: Path, comp: str, timeline: Dict[str, Any], options: D
     font, note = resolve_font(project, timeline, a.font_file, not a.no_auto_font)
     props_path, _ = write_props(project, comp, timeline, options, frame, font, bool(getattr(a, "overlay", False)))
     return props_path, frame, note
+
+
+# Mirrors DEFAULT_OPTIONS.fontFamily in src/timeline.ts: a brand font goes in front of it, so CJK
+# and other scripts still fall back to a font that has them.
+DEFAULT_FONT_STACK = ("'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans', 'Helvetica Neue', Arial, "
+                      "sans-serif")
+
+
+def _hex_colour(v: Any, where: str) -> str:
+    s = str(v).strip()
+    for prefix in ("#", "0x", "0X", "&H"):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", s):
+        die(f"{where}: {v!r} is not a colour (use RRGGBB, as ffmpeg-skill's brand.json does)", "input")
+    return "#" + s.upper()
+
+
+def brand_look(path: str) -> Tuple[Dict[str, Any], Optional[str], List[str]]:
+    """ffmpeg-skill brand.json -> (options, font file, notes). Only what the file itself states is
+    used: ffmpeg-skill fills in defaults for the rest, and those are not the user's choice."""
+    bp = Path(path).expanduser()
+    if not bp.is_file():
+        die(f"brand file not found: {bp}", "input")
+    try:
+        data = json.loads(bp.read_text(encoding="utf-8"))
+    except ValueError as e:
+        die(f"{bp} is not valid JSON: {e}", "input")
+    if not isinstance(data, dict):
+        die(f"{bp} must hold a JSON object", "input")
+    opts: Dict[str, Any] = {}
+    colours = data.get("colors") or data.get("colours") or {}
+    if colours.get("primary"):
+        opts["accent"] = _hex_colour(colours["primary"], f"{bp.name} colors.primary")
+    if colours.get("text"):
+        opts["textColor"] = _hex_colour(colours["text"], f"{bp.name} colors.text")
+    # the caption block, with styles.caption winning (ffmpeg-skill's brand_caption_style)
+    style = dict(data.get("caption") or {})
+    style.update((data.get("styles") or {}).get("caption") or {})
+    colour = style.get("color", style.get("colour"))
+    if colour:
+        opts["textColor"] = _hex_colour(colour, f"{bp.name} caption colour")
+    font = style.get("font") or data.get("font")
+    if font:
+        opts["fontFamily"] = f"'{str(font).strip()}', {DEFAULT_FONT_STACK}"
+    font_file = data.get("font_file")
+    if font_file:
+        ff = Path(font_file).expanduser()
+        font_file = str(ff if ff.is_absolute() else (bp.resolve().parent / ff))
+        if not Path(font_file).is_file():
+            die(f"{bp.name} font_file not found: {font_file}", "input")
+    notes = []
+    if data.get("logo"):
+        notes.append("brand logo: placed on delivery (deliver.py / pipeline.py --brand), not in the composition")
+    unused = [k for k in ("size", "position", "animate", "box", "outline") if k in style]
+    if unused:
+        notes.append("brand caption " + ", ".join(unused) + ": ffmpeg-skill caption settings, not used by the "
+                     "compositions (captionSize / captionMargin in --options set those)")
+    return opts, font_file, notes
+
+
+def load_look(a: argparse.Namespace) -> Dict[str, Any]:
+    """Options for render.py / still.py: the brand file's look, then --options over it."""
+    options = load_options(a.options)
+    if not getattr(a, "brand", None):
+        return options
+    b, font_file, notes = brand_look(a.brand)
+    for n in notes:
+        info(n)
+    if font_file and not a.font_file:
+        a.font_file = font_file
+    return {**b, **options}
 
 
 def load_options(path: Optional[str]) -> Dict[str, Any]:
@@ -506,7 +591,8 @@ _OPTION_TYPES: Dict[str, Any] = {
     "accent": str, "textColor": str, "fontFamily": str, "captionSize": (int, float),
     "captionMargin": (int, float, type(None)), "punchIn": (int, float), "pulse": (int, float),
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
-    "title": (str, type(None)), "beatsPerCut": int,
+    "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
+    "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
 }
 
 
@@ -529,6 +615,16 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
                 and isinstance(lt.get("start"), (int, float)) and isinstance(lt.get("end"), (int, float))
                 and lt["end"] > lt["start"] and isinstance(lt.get("sub", ""), str)):
             p.append(f"lowerThirds[{i}] needs text, start < end (seconds) and an optional sub")
+    if isinstance(o.get("chapterSeconds"), (int, float)) and not isinstance(o["chapterSeconds"], bool) \
+            and o["chapterSeconds"] < 0:
+        p.append("chapterSeconds cannot be negative")
+    if "pipCorner" in o and o["pipCorner"] not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+        p.append("pipCorner must be top-left, top-right, bottom-left or bottom-right")
+    if "pipShape" in o and o["pipShape"] not in ("rounded", "circle"):
+        p.append("pipShape must be rounded or circle")
+    if isinstance(o.get("pipSize"), (int, float)) and not isinstance(o["pipSize"], bool) \
+            and not 0.05 <= o["pipSize"] <= 0.6:
+        p.append("pipSize must be between 0.05 and 0.6 (a fraction of the frame width)")
     if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
         p.append("sceneTitles must be a list of strings")
     return p

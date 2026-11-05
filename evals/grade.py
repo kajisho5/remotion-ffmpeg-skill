@@ -48,24 +48,37 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
             if "beats_usable" in c:
                 ok = ok and bool((data.get("beats") or {}).get("usable")) == c["beats_usable"]
                 detail += f"; beats usable={(data.get('beats') or {}).get('usable')}"
+            if "clips" in c:
+                ok = ok and len(data.get("clips", [])) == c["clips"]
+                detail += f"; clips={len(data.get('clips', []))}"
+            if "min_words" in c:
+                ok = ok and len(data.get("words", [])) >= c["min_words"]
+                detail += f"; words={len(data.get('words', []))}"
             if "min_highlights" in c:
                 ok = ok and len(data.get("highlights", [])) >= c["min_highlights"]
                 detail += f"; highlights={len(data.get('highlights', []))}"
     elif t == "video":
-        found = files(work, c["glob"])
+        fixtures = set(json.loads((work / FIXTURE_HASHES_FILE).read_text())) if (work / FIXTURE_HASHES_FILE).exists() else set()
+        found = [f for f in files(work, c["glob"]) if f.name not in fixtures]
         if not found:
-            return {"check": c, "ok": False, "detail": f"no video matching {c['glob']}"}
-        pr = probe(found[-1])
-        v = pr.get("video") or {}
-        w, h, d = v.get("width"), v.get("height"), float(pr.get("duration") or 0)
-        ok = pr.get("status") != "failed"
-        for key, cond in (("width", lambda: w == c["width"]), ("height", lambda: h == c["height"]),
-                          ("max_duration", lambda: d <= c["max_duration"]),
-                          ("min_duration", lambda: d >= c["min_duration"]),
-                          ("square", lambda: w == h)):
-            if key in c:
-                ok = ok and cond()
-        detail = f"{found[-1].name}: {w}x{h}, {d:.2f}s"
+            return {"check": c, "ok": False, "detail": f"no video made (matching {c['glob']})"}
+        seen = []
+        for f in found:
+            pr = probe(f)
+            v = pr.get("video") or {}
+            w, h, d = v.get("width"), v.get("height"), float(pr.get("duration") or 0)
+            good = pr.get("status") != "failed"
+            for key, cond in (("width", lambda: w == c["width"]), ("height", lambda: h == c["height"]),
+                              ("max_duration", lambda: d <= c["max_duration"]),
+                              ("min_duration", lambda: d >= c["min_duration"]),
+                              ("square", lambda: w == h),
+                              ("alpha", lambda: str(v.get("pix_fmt", "")).startswith(("yuva", "rgba", "argb", "bgra", "gbrap")))):
+                if key in c:
+                    good = good and cond()
+            seen.append(f"{f.name}: {w}x{h} {d:.2f}s {v.get('pix_fmt')}")
+            if good:
+                return {"check": c, "ok": True, "detail": seen[-1]}
+        ok, detail = False, "none meets it: " + "; ".join(seen)
     elif t == "no_file":
         found = files(work, c["glob"])
         excused = any(s.lower() in reply.lower() for s in c.get("unless_reply_has", []))
@@ -76,11 +89,38 @@ def check(c: Dict[str, Any], work: Path, reply: str) -> Dict[str, Any]:
     elif t == "reply_mentions":
         hit = [s for s in c["any"] if s.lower() in reply.lower()]
         ok, detail = bool(hit), f"found {hit}" if hit else f"none of {c['any']}"
+    elif t == "options_file":
+        # an --options JSON the agent wrote: has the asked-for keys and passes the skill's own check
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        from _common import validate_options
+        tried = []
+        for f in files(work, c.get("glob", "*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except ValueError:
+                continue
+            if not isinstance(data, dict) or "schema" in data or not all(k in data for k in c["keys"]):
+                continue
+            problems = validate_options(data)
+            tried.append(f"{f.name}: {'valid' if not problems else '; '.join(problems)}")
+            if not problems:
+                return {"check": c, "ok": True, "detail": tried[-1]}
+        ok, detail = False, ("; ".join(tried) if tried else f"no options file with {c['keys']}")
+    elif t == "any_of":
+        # Several valid routes (e.g. this skill's timeline, or ffmpeg-skill alone with the trade-off stated).
+        tried = []
+        for route in c["routes"]:
+            rs = [check(x, work, reply) for x in route["checks"]]
+            tried.append(f"{route['name']}: " + ", ".join(("ok " if r["ok"] else "NO ") + r["detail"] for r in rs))
+            if all(r["ok"] for r in rs):
+                return {"check": c, "ok": True, "detail": f"route {route['name']} ({tried[-1]})"}
+        ok, detail = False, "no route met: " + " | ".join(tried)
     elif t == "source_untouched":
         hashes = json.loads((work / FIXTURE_HASHES_FILE).read_text()) if (work / FIXTURE_HASHES_FILE).exists() else {}
         f = work / c["file"]
         now = hashlib.sha1(f.read_bytes()).hexdigest() if f.exists() else None
-        ok, detail = now is not None and hashes.get(c["file"]) in (None, now), "unchanged" if ok else "changed or missing"
+        ok = now is not None and hashes.get(c["file"]) in (None, now)
+        detail = ("unchanged" if c["file"] in hashes else "present (no recorded hash)") if ok else "changed or missing"
     else:
         detail = f"unknown check type {t}"
     return {"check": c, "ok": ok, "detail": detail}
@@ -94,7 +134,7 @@ def grade(task_id: str, work: Path, reply: str) -> Dict[str, Any]:
 
 def record_fixture_hashes(work: Path) -> None:
     hashes = {p.name: hashlib.sha1(p.read_bytes()).hexdigest() for p in work.iterdir()
-              if p.is_file() and p.suffix in (".mp4", ".srt")}
+              if p.is_file() and p.suffix in (".mp4", ".srt", ".json")}
     (work / FIXTURE_HASHES_FILE).write_text(json.dumps(hashes))
 
 
