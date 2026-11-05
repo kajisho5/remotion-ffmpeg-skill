@@ -36,8 +36,8 @@ Wired in the agent as a CONFIRM `video.measured_motion` run as `pipeline` (step 
 - [ ] **7. KineticType composition** — per-character and per-word reveals, mask wipes, tracking animation and scale pops, timed to the measured beat grid or to word timings (lyrics, a transcription-skill transcript); typed props, CJK per character. 参考：video-shotcraft（Apache-2.0、考え方のみ）
   - なぜ要るか：ビートや歌詞に合った文字演出を、計測した時刻で正確に打てる
   - Done when: on a 120 BPM fixture every word starts on a beat within one frame; a Japanese line animates per character with the CJK font staged
-- [ ] **8. Visualizer compositions** — bars, spectrum, radial and waveform drawn from the audio per frame (`@remotion/media-utils` visualizeAudio; Remotion's licence applies), beat-reactive shapes from the measured grid, lyrics through Karaoke, and a `--loop` mode whose length is a whole number of bars for stream standby screens
-  - なぜ要るか：配信の待機画面・音楽PV・ポッドキャストの映像化を一つの部品で賄える
+- [ ] **8. Visualizer compositions** — bars, spectrum, radial and waveform drawn from the audio per frame (`@remotion/media-utils` visualizeAudio; Remotion's licence applies), beat-reactive shapes from the measured grid, lyrics through Karaoke, and a `--loop` mode whose length is a whole number of bars, for loops in an edit
+  - なぜ要るか：ループ素材・音楽PV・ポッドキャストの映像化を一つの部品で賄える
   - Done when: a fixture's loop render's last and first frames pass qc-skill's loop seam check; bars react to a test tone at the right frame
 - [ ] **9. Three.js scenes** — a `ThreeScene` composition on `@remotion/three` (MIT; Remotion's licence applies) driven by the frame and a seed, with the GL backend Remotion renders with reported by doctor (`angle` / `swangle`); same frame, same pixels on one machine
   - なぜ要るか：ビート連動の3Dタイポやパーティクルを、計測データと同じタイムラインで描ける
