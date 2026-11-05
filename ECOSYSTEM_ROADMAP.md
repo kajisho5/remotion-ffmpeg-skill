@@ -5,7 +5,7 @@ Written from a read-only audit of this repository on 2026-10-30. Each step below
 
 ## Where it stands
 
-v0.10.1. analyze, init, still, render, deliver, pipeline, doctor; compositions BeatMontage, Captioned, Highlights, Jumpcut, Karaoke, PeakPulse, Pip, Titled. 89 tests, CI on 3 OSes. Delegates heavily to ffmpeg-skill.
+v0.12.1. analyze, init, still, render, deliver, pipeline, doctor; compositions BeatMontage, Captioned, Highlights, Jumpcut, Karaoke, PeakPulse, Pip, Titled. 89 tests, CI on 3 OSes. Delegates heavily to ffmpeg-skill.
 
 ## What this repository owns
 
@@ -17,7 +17,7 @@ v0.10.1. analyze, init, still, render, deliver, pipeline, doctor; compositions B
 
 ## Wiring
 
-Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, sync, check, join, look, metadata, overlay, render, fit and color (`--conform`).
+Wired in the agent as a CONFIRM `video.measured_motion` run as `pipeline` (step 4, video-production-agent#108, pinned 0.12.1). Delegates to ffmpeg-skill probe, scenes, silence, sync, check, join, look, metadata, overlay, render, fit and color (`--conform`).
 
 ## Steps
 
@@ -35,5 +35,7 @@ Not reachable from the agent. Delegates to ffmpeg-skill probe, scenes, silence, 
 
 Pip, Titled, Captioned overlap ffmpeg-skill B-roll, motion-graphics titles, subtitle burn-in; this skill owns only the measurement-driven Remotion compositions.
 
+Terms of use: Remotion itself is free for individuals and for companies with up to 3 employees; larger companies need a Remotion company licence (README, "Licence"). That is a condition of using Remotion, separate from this skill's MIT licence, and applies to every render the agent plans through this skill.
+
 ---
-Engine for every media operation: [ffmpeg-skill](https://github.com/kajisho5/ffmpeg-skill) (42 tools, treated as complete). Orchestrator: [video-production-agent](https://github.com/kajisho5/video-production-agent).
+Engine for every media operation: [ffmpeg-skill](https://github.com/kajisho5/ffmpeg-skill) (3.x, 42 tools, contract_version 2.0; treated as complete, proposals go to Velisa's ROADMAP). Orchestrator: [video-production-agent](https://github.com/kajisho5/video-production-agent).
