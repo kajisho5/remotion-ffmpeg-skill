@@ -192,7 +192,10 @@ class Analyze(unittest.TestCase):
         self.assertEqual(code, 0, res)
         plain = self.tmp / "emph_plain.timeline.json"
         t = json.loads(tl.read_text(encoding="utf-8"))
-        plain.write_text(json.dumps({**t, "emphasis": []}, ensure_ascii=False), encoding="utf-8")
+        # the reference: the same words marked up, but never spoken (their time after the end), so the only
+        # difference between the two is when the emphasis shows -- text shaping around the span is the same
+        never = [{**e, "start": 1000.0, "end": 1001.0} for e in t["emphasis"]]
+        plain.write_text(json.dumps({**t, "emphasis": never}, ensure_ascii=False), encoding="utf-8")
         # the frame before each word starts and the frame it starts on (講演 0.86 s -> frame 26, first 5.9 s ->
         # frame 177); Thanks opens its cue, so the frame before shows no cue and a frame inside the word is used
         frames = {"講演": (25, 26), "first": (176, 177), "Thanks": (215, 222)}
@@ -206,7 +209,7 @@ class Analyze(unittest.TestCase):
             shots[name] = dict(zip(res["frames"], res["outputs"]))
         for word, (before, at) in frames.items():
             with self.subTest(word=word):
-                self.assertLess(changed_pixels(shots["emph"][before], shots["plain"][before]), 50,
+                self.assertLess(changed_pixels(shots["emph"][before], shots["plain"][before]), 10,
                                 f"{word} is emphasised before it is spoken")
                 self.assertGreater(changed_pixels(shots["emph"][at], shots["plain"][at]), 400,
                                    f"{word} is not emphasised when it is spoken")
