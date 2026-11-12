@@ -225,7 +225,7 @@ def validate_timeline(t: Any) -> List[str]:
     if t.get("pip") is not None and not (isinstance(t["pip"], dict) and isinstance(t["pip"].get("offset"), (int, float))
                                          and t["pip"].get("path")):
         p.append("pip must be {path, offset, duration, ...} (analyze.py --pip)")
-    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words", "chapters"):
+    for k in ("scenes", "silences", "speech", "peaks", "captions", "highlights", "words", "chapters", "emphasis"):
         if not isinstance(t.get(k, []), list):
             p.append(f"{k} must be a list")
     for i, c in enumerate(t.get("captions", []) or []):
@@ -233,6 +233,14 @@ def validate_timeline(t: Any) -> List[str]:
                 and isinstance(c.get("end"), (int, float)) and isinstance(c.get("text"), str)
                 and c["end"] > c["start"]):
             p.append(f"captions[{i}] needs start < end and text")
+            break
+    for i, e in enumerate(t.get("emphasis", []) or []):
+        if not (isinstance(e, dict) and isinstance(e.get("start"), (int, float)) and isinstance(e.get("end"), (int, float))
+                and isinstance(e.get("text"), str) and e["text"] and e["end"] > e["start"]
+                and isinstance(e.get("cue"), int) and 0 <= e["cue"] < len(t.get("captions") or [])
+                and e.get("style") in (None, "pop", "color", "box")):
+            p.append(f"emphasis[{i}] needs start < end, text, the index of its caption cue and a style "
+                     "(pop, color, box or null) -- analyze.py --emphasis writes it")
             break
     for i, r in enumerate(t.get("speech", []) or []):
         if not (isinstance(r, list) and len(r) == 2 and r[1] > r[0]):
@@ -254,7 +262,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -268,7 +276,8 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 
 # ---------------------------------------------------------------- Remotion project
 
-BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip")
+BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip",
+                        "Emphasis")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -593,6 +602,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
     "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
     "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
+    "emphasisStyle": str, "bubbles": list, "comments": list,
 }
 
 
@@ -625,6 +635,21 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if isinstance(o.get("pipSize"), (int, float)) and not isinstance(o["pipSize"], bool) \
             and not 0.05 <= o["pipSize"] <= 0.6:
         p.append("pipSize must be between 0.05 and 0.6 (a fraction of the frame width)")
+    if "emphasisStyle" in o and o["emphasisStyle"] not in ("pop", "color", "box"):
+        p.append("emphasisStyle must be pop, color or box")
+    for key, extra in (("bubbles", "side"), ("comments", "author")):
+        for i, c in enumerate(o.get(key) or []):
+            ok = (isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip()
+                  and isinstance(c.get("start"), (int, float)) and isinstance(c.get("end"), (int, float))
+                  and not isinstance(c["start"], bool) and not isinstance(c["end"], bool) and c["end"] > c["start"]
+                  and set(c) <= {"text", "start", "end", extra})
+            if ok and key == "bubbles":
+                ok = c.get("side", "left") in ("left", "right")
+            if ok and key == "comments":
+                ok = isinstance(c.get("author", ""), str)
+            if not ok:
+                p.append(f"{key}[{i}] needs text, start < end (seconds) and an optional {extra}"
+                         + (" (left or right)" if key == "bubbles" else ""))
     if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
         p.append("sceneTitles must be a list of strings")
     return p

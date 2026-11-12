@@ -9,7 +9,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 _TS = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})")
 _ARROW = re.compile(r"^\s*(\S+)\s+-->\s+(\S+)")
@@ -343,6 +343,169 @@ def read_word_timings(path: Path) -> Dict[str, Any]:
     if is_transcript(data):
         return parse_transcript(data)
     return {"words": parse_words(text), "cues": None, "warnings": []}
+
+
+# ---------------------------------------------------------------- emphasis (YouTube-style captions)
+
+EMPHASIS_STYLES = ("pop", "color", "box")
+EMPHASIS_AUTO = ("numbers", "names")
+_SENTENCE_END = (".", "!", "?", "。", "！", "？")
+
+
+def _fold(s: str) -> str:
+    """Lower case, one character for one character, so offsets in the folded text are offsets in the original."""
+    return "".join(ch.lower() if len(ch.lower()) == 1 else ch for ch in s)
+
+
+def _is_punct(s: str) -> bool:
+    return all(unicodedata.category(ch)[0] in ("P", "Z") or ch.isspace() for ch in s)
+
+
+def read_emphasis(text: str) -> List[Dict[str, Any]]:
+    """`--emphasis FILE`: the words to emphasise, as written by the caller. A JSON list (or {"words": [...]})
+    of strings or {"text", "at"?, "style"?}: `at` (seconds) picks the cue showing at that time, `style`
+    is pop, color or box (default: the emphasisStyle option)."""
+    data = json.loads(text)
+    if isinstance(data, dict):
+        data = data.get("words")
+    if not isinstance(data, list) or not data:
+        raise CaptionError('emphasis must be a non-empty JSON list of words or {"text", "at"?, "style"?}')
+    out: List[Dict[str, Any]] = []
+    for i, e in enumerate(data):
+        if isinstance(e, str):
+            e = {"text": e}
+        if not isinstance(e, dict) or not isinstance(e.get("text"), str) or not e["text"].strip():
+            raise CaptionError(f"emphasis[{i}] needs a non-empty text")
+        unknown = set(e) - {"text", "at", "style"}
+        if unknown:
+            raise CaptionError(f"emphasis[{i}]: unknown key(s) {sorted(unknown)} (known: text, at, style)")
+        at = e.get("at")
+        if at is not None and not _num(at):
+            raise CaptionError(f"emphasis[{i}]: at must be seconds")
+        style = e.get("style")
+        if style is not None and style not in EMPHASIS_STYLES:
+            raise CaptionError(f"emphasis[{i}]: style must be one of {', '.join(EMPHASIS_STYLES)}")
+        out.append({"text": e["text"].strip(), "at": at, "style": style})
+    return out
+
+
+def _cue_tokens(cue: Dict[str, Any], words: List[Dict[str, Any]]) -> Tuple[str, List[Tuple[int, int, int]]]:
+    """The cue's timed words (by midpoint, as the compositions assign them) joined with their own spacing,
+    and per word (global index, offset where its text starts after the leading space, offset where it ends)."""
+    joined, toks = "", []
+    for gi, w in enumerate(words):
+        mid = (w["start"] + w["end"]) / 2
+        if not cue["start"] <= mid <= cue["end"]:
+            continue
+        lead = len(w["text"]) - len(w["text"].lstrip())
+        toks.append((gi, len(joined) + lead, len(joined) + len(w["text"])))
+        joined += w["text"]
+    return joined, toks
+
+
+def _find(target: str, joined: str, toks: List[Tuple[int, int, int]]) -> List[Tuple[int, int, int, int]]:
+    """Every whole-word occurrence of target in the cue's words: (first word, last word, start, end offsets).
+    It starts where a word starts and ends where a word ends, or before only that word's trailing punctuation."""
+    folded, t, hits = _fold(joined), _fold(target), []
+    starts = {a: k for k, (_, a, _) in enumerate(toks)}
+    pos = folded.find(t)
+    while pos >= 0:
+        end = pos + len(t)
+        k = starts.get(pos)
+        if k is not None:
+            for m in range(k, len(toks)):
+                if toks[m][1] < end <= toks[m][2] and _is_punct(joined[end:toks[m][2]]):
+                    hits.append((toks[k][0], toks[m][0], pos, end))
+                    break
+        pos = folded.find(t, pos + 1)
+    return hits
+
+
+def _auto_candidates(kind: str, joined: str, toks: List[Tuple[int, int, int]]) -> List[str]:
+    out = []
+    for k, (_, a, b) in enumerate(toks):
+        word = joined[a:b]
+        core = word.rstrip("".join(ch for ch in word if _is_punct(ch)))
+        if not core:
+            continue
+        if kind == "numbers" and any(unicodedata.category(ch) == "Nd" for ch in core):
+            out.append(core)
+        elif kind == "names":
+            prev = joined[:a].rstrip()
+            katakana = len(core) >= 2 and all("\u30a0" <= ch <= "\u30ff" for ch in core)
+            capital = (core[0].isupper() and core[0].isascii() and k > 0 and prev and not prev.endswith(_SENTENCE_END))
+            if katakana or capital:
+                out.append(core)
+    return out
+
+
+def resolve_emphasis(captions: List[Dict[str, Any]], words: List[Dict[str, Any]], entries: List[Dict[str, Any]],
+                     auto: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Place each emphasised word on the caption cue that shows it, at the time the speech engine measured.
+
+    The emphasised text is a slice of the cue's own words (case and spelling as spoken in the caption),
+    never the caller's spelling and never rewritten. A caller's word that is not a whole word of the cue
+    (or of any cue, without `at`) is refused; nothing is moved, guessed or interpolated. `auto` adds the
+    cue's own numbers ("numbers") and capitalised / katakana names ("names") without a style.
+    Returns ([{start, end, text, style, cue, words: [first, last], by}], warnings)."""
+    if not words:
+        raise CaptionError("emphasis needs word timings (--words): a word's time is measured, never guessed")
+    if not captions:
+        raise CaptionError("emphasis needs caption cues")
+    tokens = [_cue_tokens(c, words) for c in captions]
+    out: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+    taken = set()
+
+    def add(ci: int, hit: Tuple[int, int, int, int], style: Optional[str], by: str) -> bool:
+        first, last, a, b = hit
+        span = set(range(first, last + 1))
+        if span & taken:
+            return False
+        taken.update(span)
+        out.append({"start": words[first]["start"], "end": words[last]["end"], "text": tokens[ci][0][a:b],
+                    "style": style, "cue": ci, "words": [first, last], "by": by})
+        return True
+
+    for e in entries:
+        if e["at"] is not None:
+            cues = [i for i, c in enumerate(captions) if c["start"] <= e["at"] < c["end"]]
+            if not cues:
+                raise CaptionError(f"emphasis {e['text']!r}: no caption cue shows at {e['at']:g} s")
+        else:
+            cues = list(range(len(captions)))
+        found, untimed_hit = 0, None
+        for ci in cues:
+            if _fold(e["text"]) not in _fold(captions[ci]["text"]):
+                continue
+            if not tokens[ci][1]:
+                untimed_hit = ci
+            for hit in _find(e["text"], *tokens[ci]):
+                if not add(ci, hit, e["style"], "caller"):
+                    raise CaptionError(f"emphasis {e['text']!r} overlaps another emphasised word in cue {ci + 1}")
+                found += 1
+        if not found and untimed_hit is not None:
+            raise CaptionError(f"emphasis {e['text']!r}: cue {untimed_hit + 1} ({captions[untimed_hit]['text']!r}) "
+                               "has no word timings, so its time is not measured")
+        if not found:
+            where = (f"the cue at {e['at']:g} s ({captions[cues[0]]['text']!r})" if e["at"] is not None
+                     else "any caption cue")
+            raise CaptionError(f"emphasis {e['text']!r} is not a whole word of {where}: only the caption's own, "
+                               "timed words can be emphasised")
+    for kind in auto:
+        if kind not in EMPHASIS_AUTO:
+            raise CaptionError(f"--emphasis-auto: unknown kind {kind!r} (known: {', '.join(EMPHASIS_AUTO)})")
+        n = 0
+        for ci, (joined, toks) in enumerate(tokens):
+            for cand in _auto_candidates(kind, joined, toks):
+                n += sum(add(ci, hit, None, kind) for hit in _find(cand, joined, toks))
+        if not n:
+            warnings.append(f"emphasis: no {kind} found in the timed caption words")
+    untimed = [i + 1 for i, (_, toks) in enumerate(tokens) if not toks]
+    if untimed and (entries or auto):
+        warnings.append("emphasis: cue(s) " + ", ".join(map(str, untimed)) + " have no word timings, so nothing "
+                        "in them can be emphasised")
+    return sorted(out, key=lambda x: x["start"]), warnings
 
 
 # ---------------------------------------------------------------- chapters

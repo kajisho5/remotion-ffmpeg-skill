@@ -19,6 +19,7 @@ Examples:
   python3 analyze.py talk.mp4 --threshold -42 --min-silence 0.8   # quiet room
   python3 analyze.py intro.mp4 talk.mov outro.mp4 --captions all.srt  # joined, then measured
   python3 analyze.py talk.mp4 --words talk.transcript.json   # captions from a transcription-skill transcript
+  python3 analyze.py talk.mp4 --words talk.transcript.json --emphasis words.json   # Emphasis composition
   python3 analyze.py phone_hdr.mov --conform                  # VFR / HDR: measure and draw on a CFR SDR copy
 """
 import argparse
@@ -34,8 +35,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
                      require_ffmpeg_skill, shell_join, version)
-from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_word_timings,
-                       youtube_chapter_warnings)
+from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_emphasis,
+                       read_word_timings, resolve_emphasis, youtube_chapter_warnings)
 
 # seconds a transcript's duration may differ from the measured source (transcription-skill's own END_TOLERANCE)
 TRANSCRIPT_DURATION_TOLERANCE = 0.5
@@ -63,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--words", help="word timings for the Karaoke and Captioned compositions: a transcription-skill "
                                     "transcript (schema transcription-skill/transcript/0.1, validated strictly) or whisper "
                                     "JSON with word timestamps; without --captions the cues are grouped from these words")
+    p.add_argument("--emphasis", metavar="FILE",
+                   help="words to emphasise in the Emphasis composition (pop, colour or box at the time each is "
+                        "spoken): a JSON list of words or {text, at?, style?}. Each must be a whole, timed word of "
+                        "a caption cue (of the cue showing at `at`), or it is refused; needs --words")
+    p.add_argument("--emphasis-auto", metavar="KINDS",
+                   help="with --words: also emphasise the captions' own numbers and/or names "
+                        "(comma-separated: numbers, names = capitalised mid-sentence or katakana words)")
     p.add_argument("--chapters", metavar="FILE|source",
                    help="chapter list, one `TIME TITLE` per line (YouTube's format, the same file ffmpeg-skill "
                         "metadata.py --chapters writes into the container), or `source` for the chapters already "
@@ -309,6 +317,24 @@ def main() -> None:
         if not captions:
             captions = timed["cues"] if transcript else cues_from_words(words)
 
+    emphasis: List[Dict[str, Any]] = []
+    emphasis_warnings: List[str] = []
+    if a.emphasis or a.emphasis_auto:
+        if not words:
+            die("--emphasis / --emphasis-auto need --words: an emphasised word shows at the time the speech "
+                "engine measured, never a guessed one", "input")
+        entries: List[Dict[str, Any]] = []
+        try:
+            if a.emphasis:
+                epath = Path(a.emphasis).expanduser()
+                if not epath.is_file():
+                    die(f"emphasis file not found: {epath}", "input")
+                entries = read_emphasis(epath.read_text(encoding="utf-8-sig"))
+            auto = [k.strip() for k in (a.emphasis_auto or "").split(",") if k.strip()]
+            emphasis, emphasis_warnings = resolve_emphasis(captions, words, entries, auto)
+        except (CaptionError, ValueError) as e:
+            die(f"--emphasis: {e}", "input")
+
     join_args = [*map(str, inputs), "-o", str(joined), "--transition", a.join_transition,
                  "--duration", str(a.join_duration)] + (["--overwrite"] if STATE.overwrite else [])
     plan = ([shell_join(ffskill_cmd("join", join_args))] if len(inputs) > 1 else []) + \
@@ -501,11 +527,13 @@ def main() -> None:
         "clips": clips,
         "captions": captions,
         "words": words,
+        "emphasis": emphasis,
         "chapters": chapters,
         "pip": pip,
         # Provenance of a conformed source (--conform): the original, each ffmpeg-skill step, the measured copy.
         "conform": conform,
-        "warnings": warnings_for(probe) + (youtube_chapter_warnings(chapters) if chapters else []) + transcript_warnings,
+        "warnings": warnings_for(probe) + (youtube_chapter_warnings(chapters) if chapters else []) + transcript_warnings
+        + emphasis_warnings,
     }
     if pip and pip["measured"] and (pip["confidence"] or 0) < 0.3:
         timeline["warnings"].append(f"pip: the measured offset ({pip['offset']:g} s) has low confidence "
@@ -531,7 +559,7 @@ def main() -> None:
                       "captions": len(captions), "chapters": len(chapters),
                       "pip_offset": pip["offset"] if pip else None, "beats": bool(beats and beats.get("usable")),
                       "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
-                      "clips": len(clips) or 1, "words": len(words),
+                      "clips": len(clips) or 1, "words": len(words), "emphasis": len(emphasis),
                       "conformed": (conform or {}).get("reasons", [])},
           "warnings": timeline["warnings"]},
          f"wrote {out}: {timeline['source']['duration']}s, {len(scenes)} scenes, {len(silences)} silences "

@@ -28,6 +28,7 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `chapters` | `[{start, end, title}]` | `--chapters FILE` (`TIME TITLE` per line, YouTube's format) or `--chapters source` (the file's own markers) | titles as written; each ends where the next starts. YouTube's rules (first at 0:00, at least three, each ≥ 10 s) become warnings |
 | `pip` | `{path, name, duration, width, height, fps, offset, confidence, measured}` or null | `--pip CAMERA` (offset from ffmpeg-skill sync.py over both audio tracks) or `--pip-offset` | offset = seconds after the source's start at which the camera's first frame belongs (negative: the camera started first) |
 | `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
+| `emphasis` | `[{start, end, text, style, cue, words, by}]` | `--emphasis FILE` (the caller's words: a JSON list of words or `{text, at?, style?}`) and / or `--emphasis-auto numbers,names`; needs `--words` | each emphasised word as a slice of caption cue `cue`'s own timed words (`words` = [first, last] index into `words`): `start` / `end` are the engine's times of those words, `text` the caption's own spelling. `style` is `pop`, `color`, `box` or null (= the `emphasisStyle` option); `by` is `caller`, `numbers` or `names`. A caller's word that is not a whole, timed word of the cue (or of the cue showing at `at`) is refused (`kind: input`) |
 | `conform` | object \| null | analyze.py `--conform` | provenance when the source was VFR or HDR: `reasons` (`vfr`, `hdr`), `original` (path, name, sha256 fingerprint, duration, frame rates, colour tags), `output` (= `source.path`), `steps` (`{reason, tool, args, command, notes}` per ffmpeg-skill call: `fit.py --fps`, then `color.py --to-sdr`), `measured` (ffmpeg-skill probe of the copy: CFR, BT.709). `pip.conform` is the same for a conformed camera. null = the source was drawn on as it is |
 | `warnings` | `[string]` | analyze.py | rotation, odd frame rate, chapters, transcript (VFR and HDR are never warnings: conformed or refused) |
 
@@ -45,6 +46,7 @@ composition exactly.
 | `Titled` | source duration | source + the user's lower thirds (`lowerThirds`) + a title card at the start of each measured scene (`sceneTitles`, in order) + a chapter card at each chapter start (`chapters`, numbered n / total) |
 | `Highlights` | sum of `highlights` (whole file if none) | ranked ranges back to back in source order, flash on cuts, "2 / 5" counter, `title` over the first |
 | `Karaoke` | source duration | caption cues whose words light up at their measured times (current word accent + lift, spoken white, upcoming dimmed); cues without timed words show plain |
+| `Emphasis` | source duration | YouTube-style captions: each cue as written; its `emphasis` words pop, take the accent colour or get an accent box from the time they are spoken to the end of the cue; speech bubbles (`bubbles`) and comment-style cards (`comments`) with the user's text at their own times |
 | `Pip` | source duration | the source with `pip` (a camera) in a corner while the camera has pictures, synced by `pip.offset`; captions on top as in Captioned |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
@@ -71,6 +73,9 @@ Every key is optional.
 | `pipSize` | `0.28` | Pip: camera width as a fraction of the frame width (circle: of the short side), 0.05–0.6 |
 | `pipShape` | `"rounded"` | Pip: `rounded` or `circle` |
 | `pipAudio` | `false` | Pip: also play the camera's own audio |
+| `emphasisStyle` | `"pop"` | Emphasis: `pop` (scales up, accent colour), `color` (accent colour) or `box` (accent box, dark text) for an emphasised word without its own `style` |
+| `bubbles` | `[]` | Emphasis: speech bubbles `[{"text", "start", "end", "side"?}]` (`side`: `left` or `right`), the user's text, seconds on the source timeline |
+| `comments` | `[]` | Emphasis: comment-style cards `[{"text", "start", "end", "author"?}]`, top left, stacked while they overlap; the user's text |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.

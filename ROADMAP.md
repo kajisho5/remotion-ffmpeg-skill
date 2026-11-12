@@ -47,7 +47,7 @@ Tick a box when it ships (with its test and docs). Order inside a group is prior
 - [ ] YouTube end screen: an end card that keeps the end-screen element areas clear for the last 20 s
 - [ ] Chapter progress bar: a progress bar split at the chapters, like the YouTube player
 - [ ] Bilingual captions: two caption files (e.g. Japanese + English) shown together
-- [ ] Keyword emphasis: words from the user's list are enlarged and coloured when spoken (needs word timings)
+- [x] Keyword emphasis: words from the user's list are enlarged and coloured when spoken (needs word timings) — `Emphasis` composition, `analyze.py --emphasis`
 - [ ] Speaker colours: captions coloured per speaker (needs speaker detection from a local engine)
 
 ## Ideas

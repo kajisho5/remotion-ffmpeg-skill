@@ -101,7 +101,7 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
 OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
     "analyze": {
         "result": {"commands": "list[str]", "verified": "bool", "summary": "object: duration, fps, size, scenes, "
-                   "silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words, "
+                   "silences, speech_seconds, peaks, captions, chapters, beats, tempo_bpm, highlights, clips, words, emphasis, "
                    "conformed (list: vfr / hdr)",
                    "warnings": "list[str]"},
         "dry_run": {"commands": "list[str]"},

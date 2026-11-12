@@ -391,6 +391,89 @@ class PipOptions(unittest.TestCase):
         self.assertTrue(_common.validate_timeline({**base, "pip": {"offset": "x"}}))
 
 
+class EmphasisWords(unittest.TestCase):
+    """analyze.py --emphasis: the caller's words placed on the caption's own timed words."""
+
+    def setUp(self):
+        import json
+        self.json = json
+        doc = json.loads((ROOT / "tests" / "fixtures" / "transcript.json").read_text(encoding="utf-8"))
+        r = _captions.parse_transcript(doc)
+        self.cues, self.words = r["cues"], r["words"]
+
+    def resolve(self, entries, auto=()):
+        return _captions.resolve_emphasis(self.cues, self.words,
+                                          _captions.read_emphasis(self.json.dumps(entries)) if entries else [],
+                                          list(auto))
+
+    def test_three_words_at_their_word_times(self):
+        out, _ = self.resolve(["講演", {"text": "first", "style": "box"}, {"text": "thanks", "at": 7.3, "style": "color"}])
+        self.assertEqual([(e["start"], e["end"], e["text"], e["style"], e["cue"]) for e in out],
+                         [(0.86, 1.4, "講演", None, 0), (5.9, 6.3, "first", "box", 2), (7.2, 7.6, "Thanks", "color", 3)])
+        # the text is the caption's own (its case), and the trailing full stop stays outside the emphasis
+        self.assertEqual(out[2]["words"], [11, 11])
+        t = timeline(captions=self.cues, words=self.words, emphasis=out)
+        self.assertEqual(_common.validate_timeline(t), [])
+
+    def test_a_phrase_over_several_words(self):
+        out, _ = self.resolve(["the first session"])
+        self.assertEqual((out[0]["start"], out[0]["end"], out[0]["text"], out[0]["words"]),
+                         (5.74, 6.4, "the first session", [8, 10]))
+
+    def test_a_word_not_in_the_cue_is_refused(self):
+        for bad, why in ((["second"], "not a whole word of any caption cue"),
+                         ([{"text": "first", "at": 7.3}], "not a whole word of the cue at 7.3 s"),
+                         (["講"], "not a whole word"),            # part of 講演, not a word of its own
+                         (["firs"], "not a whole word"),
+                         ([{"text": "first", "at": 3.0}], "no caption cue shows at 3 s"),
+                         (["silence"], "has no word timings"),     # in a cue, but that cue was not timed
+                         (["first", "first session"], "overlaps")):
+            with self.subTest(bad=bad), self.assertRaises(_captions.CaptionError) as cm:
+                self.resolve(bad)
+            self.assertIn(why, str(cm.exception))
+
+    def test_needs_word_timings(self):
+        with self.assertRaises(_captions.CaptionError):
+            _captions.resolve_emphasis(self.cues, [], [{"text": "first", "at": None, "style": None}], [])
+
+    def test_bad_files_are_refused(self):
+        for bad in ("[]", '[{"text": ""}]', '[{"text": "a", "style": "glow"}]', '[{"text": "a", "colour": 1}]',
+                    '[{"text": "a", "at": "soon"}]', '{"x": 1}'):
+            with self.subTest(bad=bad), self.assertRaises(_captions.CaptionError):
+                _captions.read_emphasis(bad)
+
+    def test_auto_numbers_and_names_come_from_the_captions(self):
+        words = [{"start": 0.0, "end": 0.4, "text": "We"}, {"start": 0.4, "end": 0.8, "text": " met"},
+                 {"start": 0.8, "end": 1.2, "text": " Mira"}, {"start": 1.2, "end": 1.6, "text": " 42"},
+                 {"start": 1.6, "end": 2.0, "text": " times."}, {"start": 2.0, "end": 2.4, "text": " Then"},
+                 {"start": 3.0, "end": 3.5, "text": "サクラ"}, {"start": 3.5, "end": 3.8, "text": "は"},
+                 {"start": 3.8, "end": 4.2, "text": "３回"}]
+        cues = [{"start": 0.0, "end": 2.4, "text": "We met Mira 42 times. Then"},
+                {"start": 3.0, "end": 4.2, "text": "サクラは３回"}]
+        out, warn = _captions.resolve_emphasis(cues, words, [], ["numbers", "names"])
+        self.assertEqual([(e["text"], e["by"]) for e in out],
+                         [("Mira", "names"), ("42", "numbers"), ("サクラ", "names"), ("３回", "numbers")])
+        self.assertEqual(warn, [])   # "We" opens the cue and "Then" a sentence: not names
+        with self.assertRaises(_captions.CaptionError):
+            _captions.resolve_emphasis(cues, words, [], ["nouns"])
+
+    def test_options_and_parity(self):
+        ok = {"emphasisStyle": "box", "bubbles": [{"text": "Hi!", "start": 1, "end": 2, "side": "right"}],
+              "comments": [{"text": "Nice", "author": "Pat", "start": 1, "end": 3}]}
+        self.assertEqual(_common.validate_options(ok), [])
+        for bad in ({"emphasisStyle": "glow"}, {"bubbles": [{"text": "", "start": 1, "end": 2}]},
+                    {"bubbles": [{"text": "a", "start": 2, "end": 1}]}, {"bubbles": [{"text": "a", "start": 1, "end": 2,
+                                                                                         "side": "up"}]},
+                    {"comments": [{"text": "a", "start": 1, "end": 2, "author": 3}]},
+                    {"comments": [{"text": "a", "start": 1, "end": 2, "likes": 3}]}):
+            with self.subTest(bad=bad):
+                self.assertTrue(_common.validate_options(bad))
+        self.assertEqual(_common.expected_frames("Emphasis", timeline()), 240)
+        self.assertIn("Emphasis", _common.BUILTIN_COMPOSITIONS)
+        bad = timeline(captions=self.cues, emphasis=[{"start": 1, "end": 2, "text": "x", "cue": 9, "style": None}])
+        self.assertTrue(any("emphasis[0]" in p for p in _common.validate_timeline(bad)))
+
+
 class Chapters(unittest.TestCase):
     def test_youtube_format_kept_as_written(self):
         ch = _captions.parse_chapters("0:00 Intro\n1:05 - Setup and tools\n# comment\n\n1:02:03.5 Q&A\n", 4000)

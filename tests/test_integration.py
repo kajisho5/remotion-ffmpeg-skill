@@ -149,6 +149,71 @@ class Analyze(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout[-2000:] + proc.stderr[-4000:])
         self.assertTrue(json.loads(proc.stdout)["verified"])
 
+    EMPHASIS = ["講演", {"text": "first", "style": "box"}, {"text": "Thanks", "at": 7.4, "style": "color"}]
+
+    def emphasis_timeline(self, name, entries):
+        efile = self.tmp / f"{name}.emphasis.json"
+        efile.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+        tl = self.tmp / f"{name}.timeline.json"
+        code, res = script("analyze", self.src, "--words", TRANSCRIPT, "--emphasis", efile, "-o", tl, "--no-scenes")
+        return code, res, tl
+
+    def test_emphasis_words_at_their_word_times(self):
+        code, res, tl = self.emphasis_timeline("emph", self.EMPHASIS)
+        self.assertEqual(code, 0, res)
+        self.assertEqual(_contract.missing_output_keys("analyze", res), [])
+        self.assertEqual(res["summary"]["emphasis"], 3)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(_common.validate_timeline(t), [])
+        self.assertEqual([(e["start"], e["end"], e["text"], e["cue"]) for e in t["emphasis"]],
+                         [(0.86, 1.4, "講演", 0), (5.9, 6.3, "first", 2), (7.2, 7.6, "Thanks", 3)])
+        self.assertEqual(t["captions"], TRANSCRIPT_CUES)     # the captions themselves are untouched
+        proj = self.tmp / "proj_emph"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--comp", "Emphasis", "--timeline", tl,
+                           "-o", self.tmp / "emph.mp4", "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertEqual(res["expected_frames"], 240)
+
+    def test_emphasis_refuses_a_word_not_in_the_cue(self):
+        code, res, _ = self.emphasis_timeline("emph_bad", [{"text": "first", "at": 7.4}])
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+        self.assertIn("not a whole word of the cue at 7.4 s", res["error"])
+        code, res = script("analyze", self.src, "--emphasis-auto", "numbers", "-o", self.tmp / "emph_nw.json")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(res["kind"], "input")
+        self.assertIn("need --words", res["error"])
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_emphasis_shows_each_word_at_its_time(self):
+        code, res, tl = self.emphasis_timeline("emph_real", self.EMPHASIS)
+        self.assertEqual(code, 0, res)
+        plain = self.tmp / "emph_plain.timeline.json"
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        plain.write_text(json.dumps({**t, "emphasis": []}, ensure_ascii=False), encoding="utf-8")
+        # the frame before each word starts and the frame it starts on (講演 0.86 s -> frame 26, first 5.9 s ->
+        # frame 177); Thanks opens its cue, so the frame before shows no cue and a frame inside the word is used
+        frames = {"講演": (25, 26), "first": (176, 177), "Thanks": (215, 222)}
+        shots = {}
+        for name, timeline in (("emph", tl), ("plain", plain)):
+            out_dir = self.tmp / f"stills_{name}"
+            args = [a for f in sorted(x for p in frames.values() for x in p) for a in ("--frame", f)]
+            code, res = script("still", "--project", PROJECT, "--comp", "Emphasis", "--timeline", timeline,
+                               "--out-dir", out_dir, *args)
+            self.assertEqual(code, 0, res)
+            shots[name] = dict(zip(res["frames"], res["outputs"]))
+        for word, (before, at) in frames.items():
+            with self.subTest(word=word):
+                self.assertLess(changed_pixels(shots["emph"][before], shots["plain"][before]), 50,
+                                f"{word} is emphasised before it is spoken")
+                self.assertGreater(changed_pixels(shots["emph"][at], shots["plain"][at]), 400,
+                                   f"{word} is not emphasised when it is spoken")
+        proc = subprocess.run([sys.executable, str(SCRIPTS / "render.py"), "--project", PROJECT, "--comp", "Emphasis",
+                               "--timeline", str(tl), "-o", str(self.tmp / "real_emphasis.mp4"), "--fast", "--json"],
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:] + proc.stderr[-4000:])
+        self.assertTrue(json.loads(proc.stdout)["verified"])
+
     def test_transcript_words_with_srt_cues(self):
         tl = self.tmp / "transcript_srt.timeline.json"
         code, res = script("analyze", self.src, "--captions", self.tmp / "cues.srt", "--words", TRANSCRIPT,
@@ -434,6 +499,17 @@ def colour_tags(path: Path):
                           "stream=color_transfer,color_primaries,color_space", "-of", "json", str(path)],
                          capture_output=True, text=True, check=True).stdout
     return json.loads(out)["streams"][0]
+
+
+def changed_pixels(a, b, level: int = 60) -> int:
+    """Pixels where two same-size images differ by more than `level` in any channel (test-side check)."""
+    def rgb(p):
+        return subprocess.run(["ffmpeg", "-v", "error", "-i", str(p), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                              capture_output=True, check=True).stdout
+    x, y = rgb(a), rgb(b)
+    assert len(x) == len(y), "images differ in size"
+    return sum(1 for i in range(0, len(x), 3) if max(abs(x[i] - y[i]), abs(x[i + 1] - y[i + 1]),
+                                                     abs(x[i + 2] - y[i + 2])) > level)
 
 
 def sha256(path: Path) -> str:
