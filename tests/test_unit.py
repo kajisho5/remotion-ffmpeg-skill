@@ -408,8 +408,9 @@ class EmphasisWords(unittest.TestCase):
 
     def test_three_words_at_their_word_times(self):
         out, _ = self.resolve(["講演", {"text": "first", "style": "box"}, {"text": "thanks", "at": 7.3, "style": "color"}])
-        self.assertEqual([(e["start"], e["end"], e["text"], e["style"], e["cue"]) for e in out],
-                         [(0.86, 1.4, "講演", None, 0), (5.9, 6.3, "first", "box", 2), (7.2, 7.6, "Thanks", "color", 3)])
+        self.assertEqual([(e["start"], e["end"], e["text"], e["style"], e["cue"], e["span"]) for e in out],
+                         [(0.86, 1.4, "講演", None, 0, [3, 5]), (5.9, 6.3, "first", "box", 2, [15, 20]),
+                          (7.2, 7.6, "Thanks", "color", 3, [0, 6])])
         # the text is the caption's own (its case), and the trailing full stop stays outside the emphasis
         self.assertEqual(out[2]["words"], [11, 11])
         t = timeline(captions=self.cues, words=self.words, emphasis=out)
@@ -431,6 +432,25 @@ class EmphasisWords(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(_captions.CaptionError) as cm:
                 self.resolve(bad)
             self.assertIn(why, str(cm.exception))
+
+    def test_the_caption_text_is_what_is_marked(self):
+        # captions and word timings given separately: the cue's own text wins and must agree
+        words = [{"start": 0.0, "end": 0.5, "text": "Hello"}, {"start": 0.5, "end": 1.0, "text": " foot"},
+                 {"start": 1.0, "end": 1.5, "text": " world!"}]
+        cues = [{"start": 0.0, "end": 1.5, "text": "Hello, football world!"}]
+        out, _ = _captions.resolve_emphasis(cues, words, [{"text": "WORLD", "at": None, "style": None}], [])
+        self.assertEqual((out[0]["text"], out[0]["span"], out[0]["words"]), ("world", [16, 21], [2, 2]))
+        with self.assertRaises(_captions.CaptionError) as cm:
+            _captions.resolve_emphasis(cues, words, [{"text": "foot", "at": None, "style": None}], [])
+        self.assertIn("disagree", str(cm.exception))
+
+    def test_auto_marks_only_the_qualifying_occurrence(self):
+        words = [{"start": 0.0, "end": 0.3, "text": "We"}, {"start": 0.3, "end": 0.6, "text": " met"},
+                 {"start": 0.6, "end": 0.9, "text": " Mira."}, {"start": 0.9, "end": 1.2, "text": " Mira"},
+                 {"start": 1.2, "end": 1.5, "text": " left."}]
+        cues = [{"start": 0.0, "end": 1.5, "text": "We met Mira. Mira left."}]
+        out, _ = _captions.resolve_emphasis(cues, words, [], ["names"])
+        self.assertEqual([(e["span"], e["words"]) for e in out], [([7, 11], [2, 2])])
 
     def test_needs_word_timings(self):
         with self.assertRaises(_captions.CaptionError):
@@ -470,8 +490,17 @@ class EmphasisWords(unittest.TestCase):
                 self.assertTrue(_common.validate_options(bad))
         self.assertEqual(_common.expected_frames("Emphasis", timeline()), 240)
         self.assertIn("Emphasis", _common.BUILTIN_COMPOSITIONS)
-        bad = timeline(captions=self.cues, emphasis=[{"start": 1, "end": 2, "text": "x", "cue": 9, "style": None}])
-        self.assertTrue(any("emphasis[0]" in p for p in _common.validate_timeline(bad)))
+        good = {"start": 0.86, "end": 1.4, "text": "講演", "cue": 0, "span": [3, 5], "words": [2, 2], "style": None}
+        self.assertEqual(_common.validate_timeline(timeline(captions=self.cues, words=self.words, emphasis=[good])), [])
+        for over in ({"cue": 9}, {"words": None}, {"span": [0, 2]}, {"words": [2, 99]}, {"end": float("inf")}):
+            with self.subTest(over=over):
+                bad = timeline(captions=self.cues, words=self.words, emphasis=[{**good, **over}])
+                self.assertTrue(any("emphasis[0]" in p for p in _common.validate_timeline(bad)))
+        self.assertTrue(_common.validate_timeline(timeline(emphasis=1)))           # an error, not a TypeError
+        for bad in ({"bubbles": 1}, {"comments": True},
+                    {"bubbles": [{"text": "a", "start": 1, "end": float("inf")}]}):
+            with self.subTest(bad=bad):
+                self.assertTrue(_common.validate_options(bad))
 
 
 class Chapters(unittest.TestCase):

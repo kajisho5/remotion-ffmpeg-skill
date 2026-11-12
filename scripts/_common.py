@@ -234,19 +234,37 @@ def validate_timeline(t: Any) -> List[str]:
                 and c["end"] > c["start"]):
             p.append(f"captions[{i}] needs start < end and text")
             break
-    for i, e in enumerate(t.get("emphasis", []) or []):
-        if not (isinstance(e, dict) and isinstance(e.get("start"), (int, float)) and isinstance(e.get("end"), (int, float))
-                and isinstance(e.get("text"), str) and e["text"] and e["end"] > e["start"]
-                and isinstance(e.get("cue"), int) and 0 <= e["cue"] < len(t.get("captions") or [])
-                and e.get("style") in (None, "pop", "color", "box")):
-            p.append(f"emphasis[{i}] needs start < end, text, the index of its caption cue and a style "
-                     "(pop, color, box or null) -- analyze.py --emphasis writes it")
+    emph = t.get("emphasis") or []
+    caps = t.get("captions") if isinstance(t.get("captions"), list) else []
+    nwords = len(t["words"]) if isinstance(t.get("words"), list) else 0
+    for i, e in enumerate(emph if isinstance(emph, list) else []):
+        ok = (isinstance(e, dict) and _finite(e.get("start")) and _finite(e.get("end")) and e["end"] > e["start"]
+              and isinstance(e.get("text"), str) and e["text"] and isinstance(e.get("cue"), int)
+              and not isinstance(e["cue"], bool) and 0 <= e["cue"] < len(caps)
+              and e.get("style") in (None, "pop", "color", "box"))
+        for key, limit in (("span", None), ("words", nwords)):
+            r = e.get(key) if ok else None
+            ok = ok and (isinstance(r, list) and len(r) == 2 and all(isinstance(x, int) and not isinstance(x, bool)
+                                                                       for x in r) and 0 <= r[0] <= r[1])
+            if ok and limit is not None:
+                ok = r[1] < limit
+        if ok:
+            cue_text = caps[e["cue"]].get("text") if isinstance(caps[e["cue"]], dict) else None
+            ok = isinstance(cue_text, str) and e["span"][1] <= len(cue_text) and \
+                cue_text[e["span"][0]:e["span"][1]] == e["text"]
+        if not ok:
+            p.append(f"emphasis[{i}] needs start < end, text, its caption cue, the span of the text in that cue, "
+                     "its word range and a style (pop, color, box or null) -- analyze.py --emphasis writes it")
             break
     for i, r in enumerate(t.get("speech", []) or []):
         if not (isinstance(r, list) and len(r) == 2 and r[1] > r[0]):
             p.append(f"speech[{i}] must be [start, end] with start < end")
             break
     return p
+
+
+def _finite(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def sec_to_frames(seconds: float, fps: float) -> int:
@@ -638,10 +656,10 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if "emphasisStyle" in o and o["emphasisStyle"] not in ("pop", "color", "box"):
         p.append("emphasisStyle must be pop, color or box")
     for key, extra in (("bubbles", "side"), ("comments", "author")):
-        for i, c in enumerate(o.get(key) or []):
+        items = o.get(key)
+        for i, c in enumerate(items if isinstance(items, list) else []):
             ok = (isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip()
-                  and isinstance(c.get("start"), (int, float)) and isinstance(c.get("end"), (int, float))
-                  and not isinstance(c["start"], bool) and not isinstance(c["end"], bool) and c["end"] > c["start"]
+                  and _finite(c.get("start")) and _finite(c.get("end")) and c["end"] > c["start"]
                   and set(c) <= {"text", "start", "end", extra})
             if ok and key == "bubbles":
                 ok = c.get("side", "left") in ("left", "right")

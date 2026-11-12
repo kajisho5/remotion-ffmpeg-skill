@@ -28,24 +28,26 @@ export const Emphasis: React.FC<Props> = (props) => {
   const o = resolveOptions(options);
   const family = fontStack(o, font);
   const { fps } = useVideoConfig();
-  const words = timeline.words ?? [];
   const emphasis = timeline.emphasis ?? [];
+  // Cards showing at once stack downwards: each takes the lowest slot no earlier overlapping card holds.
+  const slots: number[] = [];
+  o.comments.forEach((c, i) => {
+    const busy = new Set(o.comments.slice(0, i).flatMap((p, j) => (p.start < c.end && p.end > c.start ? [slots[j]] : [])));
+    let s = 0;
+    while (busy.has(s)) s += 1;
+    slots.push(s);
+  });
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo source={timeline.source} fit={outputFrame(props).fit} />}
       {timeline.captions.map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
-        // The cue's words by midpoint, as analyze.py placed the emphasis on them; [global index, word].
-        const own = words
-          .map((w, gi) => [gi, w] as [number, Caption])
-          .filter(([, w]) => (w.start + w.end) / 2 >= c.start && (w.start + w.end) / 2 <= c.end);
         return (
           <Sequence key={`c${i}`} from={from} durationInFrames={dur} name={`cue ${i + 1}`} layout="none">
             <EmphasisCue
               cue={c}
               from={from}
-              words={own}
               emphasis={emphasis.filter((e) => e.cue === i)}
               len={dur}
               o={o}
@@ -66,8 +68,7 @@ export const Emphasis: React.FC<Props> = (props) => {
       {o.comments.map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
-        // Cards showing at once stack downwards in the order given.
-        const slot = o.comments.slice(0, i).filter((p) => p.start < c.end && p.end > c.start).length;
+        const slot = slots[i];
         return (
           <Sequence key={`m${i}`} from={from} durationInFrames={dur} name={`comment ${i + 1}`} layout="none">
             <Comment card={c} slot={slot} len={dur} o={o} fontFamily={family} />
@@ -93,44 +94,30 @@ const useInOut = (len: number) => {
 const EmphasisCue: React.FC<{
   cue: Caption;
   from: number;
-  words: [number, Caption][];
   emphasis: EmphasisWord[];
   len: number;
   o: Options;
   fontFamily: string;
-}> = ({ cue, from, words, emphasis, len, o, fontFamily }) => {
+}> = ({ cue, from, emphasis, len, o, fontFamily }) => {
   const { fps, width, height } = useVideoConfig();
   const { frame, enter, exit } = useInOut(len);
   const size = Math.round(Math.min(width, height) * o.captionSize * 1.1);
   // Source time of this frame, nudged by a microsecond as in Karaoke so a word starting exactly on a
   // frame shows on that frame.
   const now = (from + frame) / fps + 1e-6;
-  const firstOf = new Map(emphasis.map((e) => [e.words[0], e]));
+  // The cue's own text, cut at the emphasised spans (code points, as analyze.py counted them).
+  const chars = Array.from(cue.text);
   const parts: React.ReactNode[] = [];
-  for (let k = 0; k < words.length; k++) {
-    const [gi, w] = words[k];
-    const e = firstOf.get(gi);
-    const lead = w.text.match(/^\s*/)?.[0] ?? "";
-    if (!e) {
-      parts.push(<React.Fragment key={k}>{w.text}</React.Fragment>);
-      continue;
-    }
-    // The run of the cue's own words the emphasis covers; its text is a prefix of that run (what is left
-    // is the last word's trailing punctuation, drawn plain).
-    let run = w.text.slice(lead.length);
-    while (k + 1 < words.length && words[k + 1][0] <= e.words[1]) {
-      k += 1;
-      run += words[k][1].text;
-    }
-    const rest = run.slice(e.text.length);
+  let at = 0;
+  for (const [k, e] of [...emphasis].sort((x, y) => x.span[0] - y.span[0]).entries()) {
+    if (e.span[0] < at) continue;
+    parts.push(chars.slice(at, e.span[0]).join(""));
     parts.push(
-      <React.Fragment key={k}>
-        {lead}
-        <Emphasised text={run.slice(0, e.text.length)} style={e.style ?? o.emphasisStyle} at={e.start} now={now} o={o} />
-        {rest}
-      </React.Fragment>,
+      <Emphasised key={k} text={chars.slice(e.span[0], e.span[1]).join("")} style={e.style ?? o.emphasisStyle} at={e.start} now={now} o={o} />,
     );
+    at = e.span[1];
   }
+  parts.push(chars.slice(at).join(""));
   return (
     <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: captionMarginPx(o, width, height) }}>
       <div
@@ -152,7 +139,7 @@ const EmphasisCue: React.FC<{
           transform: `translateY(${(1 - enter) * size * 0.5}px)`,
         }}
       >
-        {words.length === 0 ? cue.text : parts}
+        {parts}
       </div>
     </AbsoluteFill>
   );

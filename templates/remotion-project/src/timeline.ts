@@ -19,9 +19,9 @@ export type Source = {
 
 export type Caption = { start: number; end: number; text: string };
 export type Chapter = { start: number; end: number; title: string };
-/** An emphasised word (analyze.py --emphasis / --emphasis-auto): a slice of caption cue `cue`'s own timed
- * words `words` = [first, last] (indices into timeline.words), shown from the time the engine measured.
- * style null = the emphasisStyle option. */
+/** An emphasised word (analyze.py --emphasis / --emphasis-auto): the slice `span` ([start, end) in code
+ * points) of caption cue `cue`'s own text, timed by the words `words` = [first, last] (indices into
+ * timeline.words), shown from the time the engine measured. style null = the emphasisStyle option. */
 export type EmphasisStyle = "pop" | "color" | "box";
 export type Emphasis = {
   start: number;
@@ -29,6 +29,7 @@ export type Emphasis = {
   text: string;
   style: EmphasisStyle | null;
   cue: number;
+  span: [number, number];
   words: [number, number];
   by: "caller" | "numbers" | "names";
 };

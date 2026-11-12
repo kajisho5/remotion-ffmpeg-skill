@@ -319,7 +319,7 @@ def main() -> None:
 
     emphasis: List[Dict[str, Any]] = []
     emphasis_warnings: List[str] = []
-    if a.emphasis or a.emphasis_auto:
+    if a.emphasis is not None or a.emphasis_auto is not None:
         if not words:
             die("--emphasis / --emphasis-auto need --words: an emphasised word shows at the time the speech "
                 "engine measured, never a guessed one", "input")
@@ -331,6 +331,8 @@ def main() -> None:
                     die(f"emphasis file not found: {epath}", "input")
                 entries = read_emphasis(epath.read_text(encoding="utf-8-sig"))
             auto = [k.strip() for k in (a.emphasis_auto or "").split(",") if k.strip()]
+            if a.emphasis_auto is not None and not auto:
+                die("--emphasis-auto needs at least one kind: numbers, names", "input")
             emphasis, emphasis_warnings = resolve_emphasis(captions, words, entries, auto)
         except (CaptionError, ValueError) as e:
             die(f"--emphasis: {e}", "input")

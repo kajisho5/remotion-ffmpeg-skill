@@ -421,7 +421,30 @@ def _find(target: str, joined: str, toks: List[Tuple[int, int, int]]) -> List[Tu
     return hits
 
 
-def _auto_candidates(kind: str, joined: str, toks: List[Tuple[int, int, int]]) -> List[str]:
+def _cjk(ch: str) -> bool:
+    return "\u3040" <= ch <= "\u30ff" or "\u3400" <= ch <= "\u9fff" or "\uac00" <= ch <= "\ud7af" or "\uff00" <= ch <= "\uffef"
+
+
+def _text_hits(target: str, text: str) -> List[Tuple[int, int]]:
+    """Whole-word occurrences of target in a cue's own text, as [start, end) code-point offsets. Between
+    Latin letters or digits a boundary is needed (`foot` is not in `football`); CJK text has no spaces, so
+    there the timed words decide what a word is."""
+    folded, t, out = _fold(text), _fold(target), []
+    pos = folded.find(t)
+    while pos >= 0:
+        end = pos + len(t)
+        before = text[pos - 1] if pos else ""
+        after = text[end] if end < len(text) else ""
+        glued = lambda x, y: bool(x and y and x.isalnum() and y.isalnum() and not (_cjk(x) or _cjk(y)))
+        if not glued(before, text[pos]) and not glued(text[end - 1], after):
+            out.append((pos, end))
+        pos = folded.find(t, pos + 1)
+    return out
+
+
+def _auto_candidates(kind: str, joined: str, toks: List[Tuple[int, int, int]]) -> List[Tuple[int, str]]:
+    """(position among the cue's words, word) of each qualifying word: only that word, not every
+    occurrence of its spelling, is emphasised."""
     out = []
     for k, (_, a, b) in enumerate(toks):
         word = joined[a:b]
@@ -429,13 +452,13 @@ def _auto_candidates(kind: str, joined: str, toks: List[Tuple[int, int, int]]) -
         if not core:
             continue
         if kind == "numbers" and any(unicodedata.category(ch) == "Nd" for ch in core):
-            out.append(core)
+            out.append((k, core))
         elif kind == "names":
             prev = joined[:a].rstrip()
             katakana = len(core) >= 2 and all("\u30a0" <= ch <= "\u30ff" for ch in core)
             capital = (core[0].isupper() and core[0].isascii() and k > 0 and prev and not prev.endswith(_SENTENCE_END))
             if katakana or capital:
-                out.append(core)
+                out.append((k, core))
     return out
 
 
@@ -447,7 +470,11 @@ def resolve_emphasis(captions: List[Dict[str, Any]], words: List[Dict[str, Any]]
     never the caller's spelling and never rewritten. A caller's word that is not a whole word of the cue
     (or of any cue, without `at`) is refused; nothing is moved, guessed or interpolated. `auto` adds the
     cue's own numbers ("numbers") and capitalised / katakana names ("names") without a style.
-    Returns ([{start, end, text, style, cue, words: [first, last], by}], warnings)."""
+    The word must also be a whole word of the cue's own text (that text is what is drawn); `span` is its
+    [start, end) code-point offsets there.
+    Returns ([{start, end, text, style, cue, span, words: [first, last], by}], warnings)."""
+    if not entries and not auto:
+        raise CaptionError("nothing to emphasise: give words (--emphasis) or kinds (--emphasis-auto)")
     if not words:
         raise CaptionError("emphasis needs word timings (--words): a word's time is measured, never guessed")
     if not captions:
@@ -457,14 +484,28 @@ def resolve_emphasis(captions: List[Dict[str, Any]], words: List[Dict[str, Any]]
     warnings: List[str] = []
     taken = set()
 
-    def add(ci: int, hit: Tuple[int, int, int, int], style: Optional[str], by: str) -> bool:
-        first, last, a, b = hit
+    def matches(ci: int, target: str) -> List[Tuple[Tuple[int, int, int, int], Tuple[int, int]]]:
+        """The timed whole-word hits of target in cue ci, each paired with the same occurrence in the
+        cue's own text (n-th with n-th). The caption text is what is drawn, so the two must agree."""
+        timed = _find(target, *tokens[ci])
+        if not timed:
+            return []
+        in_text = _text_hits(target, captions[ci]["text"])
+        if len(in_text) != len(timed):
+            raise CaptionError(f"emphasis {target!r}: cue {ci + 1} ({captions[ci]['text']!r}) has it "
+                               f"{len(in_text)} time(s) as a whole word but its word timings {len(timed)}; the "
+                               "caption and the word timings disagree, so its time cannot be placed")
+        return list(zip(timed, in_text))
+
+    def add(ci: int, hit: Tuple[int, int, int, int], span_text: Tuple[int, int], style: Optional[str], by: str) -> bool:
+        first, last, _, _ = hit
         span = set(range(first, last + 1))
         if span & taken:
             return False
         taken.update(span)
-        out.append({"start": words[first]["start"], "end": words[last]["end"], "text": tokens[ci][0][a:b],
-                    "style": style, "cue": ci, "words": [first, last], "by": by})
+        a, b = span_text
+        out.append({"start": words[first]["start"], "end": words[last]["end"], "text": captions[ci]["text"][a:b],
+                    "style": style, "cue": ci, "span": [a, b], "words": [first, last], "by": by})
         return True
 
     for e in entries:
@@ -480,8 +521,8 @@ def resolve_emphasis(captions: List[Dict[str, Any]], words: List[Dict[str, Any]]
                 continue
             if not tokens[ci][1]:
                 untimed_hit = ci
-            for hit in _find(e["text"], *tokens[ci]):
-                if not add(ci, hit, e["style"], "caller"):
+            for hit, span_text in matches(ci, e["text"]):
+                if not add(ci, hit, span_text, e["style"], "caller"):
                     raise CaptionError(f"emphasis {e['text']!r} overlaps another emphasised word in cue {ci + 1}")
                 found += 1
         if not found and untimed_hit is not None:
@@ -497,8 +538,13 @@ def resolve_emphasis(captions: List[Dict[str, Any]], words: List[Dict[str, Any]]
             raise CaptionError(f"--emphasis-auto: unknown kind {kind!r} (known: {', '.join(EMPHASIS_AUTO)})")
         n = 0
         for ci, (joined, toks) in enumerate(tokens):
-            for cand in _auto_candidates(kind, joined, toks):
-                n += sum(add(ci, hit, None, kind) for hit in _find(cand, joined, toks))
+            for k, cand in _auto_candidates(kind, joined, toks):
+                try:
+                    pairs = matches(ci, cand)
+                except CaptionError as err:
+                    warnings.append(f"{err} (skipped)")
+                    continue
+                n += sum(add(ci, hit, span_text, None, kind) for hit, span_text in pairs if hit[0] == toks[k][0])
         if not n:
             warnings.append(f"emphasis: no {kind} found in the timed caption words")
     untimed = [i + 1 for i, (_, toks) in enumerate(tokens) if not toks]

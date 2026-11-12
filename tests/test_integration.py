@@ -183,6 +183,8 @@ class Analyze(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(res["kind"], "input")
         self.assertIn("need --words", res["error"])
+        code, res = script("analyze", self.src, "--words", TRANSCRIPT, "--emphasis-auto", ",", "-o", self.tmp / "e.json")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
 
     @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
     def test_real_emphasis_shows_each_word_at_its_time(self):
