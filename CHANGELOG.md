@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 — 2026-11-12
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- Emphasis captions (YouTube style) (#18)
+
+
 ## 0.12.1 — 2026-10-31
 
 _Automated release: version and notes from what was merged since the previous tag._
