@@ -212,7 +212,7 @@ def main() -> None:
     if a.overlay:
         if a.comp in ("Jumpcut", "Highlights", "BeatMontage", "Pip"):
             die(f"--overlay cannot do {a.comp}: it changes the picture itself (overlay works for "
-                "Captioned, PeakPulse, Titled, Karaoke)", "input")
+                "Captioned, PeakPulse, Titled, Karaoke, Emphasis)", "input")
         if a.aspect not in (None, "source") or a.width is not None or a.fit not in (None, "contain"):
             die("--overlay draws on the source's own frame: drop --aspect / --width / --fit", "input")
         if a.fast or a.codec != "h264" or frames:

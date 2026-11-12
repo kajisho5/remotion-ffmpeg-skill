@@ -42,7 +42,7 @@ Wired in the agent as a CONFIRM `video.measured_motion` run as `pipeline` (step 
 - [ ] **9. Three.js scenes** — a `ThreeScene` composition on `@remotion/three` (MIT; Remotion's licence applies) driven by the frame and a seed, with the GL backend Remotion renders with reported by doctor (`angle` / `swangle`); same frame, same pixels on one machine
   - なぜ要るか：ビート連動の3Dタイポやパーティクルを、計測データと同じタイムラインで描ける
   - Done when: two renders of a fixture have the same framemd5 on the CI machine; doctor names the backend
-- [ ] **10. Emphasis captions (YouTube style)** — captions where chosen words (given by the caller, or the transcript's numbers and nouns when asked) pop, change colour or get a box, plus speech-bubble and comment-style cards; the words are the caption's own, never rewritten
+- [x] **10. Emphasis captions (YouTube style)** — captions where chosen words (given by the caller, or the transcript's numbers and nouns when asked) pop, change colour or get a box, plus speech-bubble and comment-style cards; the words are the caption's own, never rewritten ([#18](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/18): `Emphasis` composition, `analyze.py --emphasis` / `--emphasis-auto numbers,names`; "nouns" is capitalised or katakana names, as no part-of-speech model is shipped)
   - なぜ要るか：YouTuber 風の強調テロップと吹き出しを、字幕の時刻から自動で付けられる
   - Done when: a fixture with three emphasised words shows each at its word time; a word not in the cue is refused
 - [ ] **11. Style presets and layer output** — `--style swiss|minimal|neon|glitch|wafu|corporate` as an options bundle (a brand kit wins key by key), and `--layers` writing each graphic group as its own transparent ProRes 4444 with a manifest (times, position) beside the composite

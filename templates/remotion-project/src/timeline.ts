@@ -19,6 +19,23 @@ export type Source = {
 
 export type Caption = { start: number; end: number; text: string };
 export type Chapter = { start: number; end: number; title: string };
+/** An emphasised word (analyze.py --emphasis / --emphasis-auto): the slice `span` ([start, end) in code
+ * points) of caption cue `cue`'s own text, timed by the words `words` = [first, last] (indices into
+ * timeline.words), shown from the time the engine measured. style null = the emphasisStyle option. */
+export type EmphasisStyle = "pop" | "color" | "box";
+export type Emphasis = {
+  start: number;
+  end: number;
+  text: string;
+  style: EmphasisStyle | null;
+  cue: number;
+  span: [number, number];
+  words: [number, number];
+  by: "caller" | "numbers" | "names";
+};
+/** A speech bubble or a comment-style card: the user's text, timing in source seconds. */
+export type Bubble = { text: string; start: number; end: number; side?: "left" | "right" };
+export type CommentCard = { text: string; start: number; end: number; author?: string };
 /** A second recording shown picture-in-picture (analyze.py --pip). offset: seconds after the source's
  * start at which the camera's first frame belongs (measured from both audio tracks, or given). */
 export type Pip = {
@@ -67,6 +84,8 @@ export type Timeline = {
   words?: Caption[];
   /** Chapters from the user's list or the source's own markers (analyze.py --chapters); titles as written. */
   chapters?: Chapter[];
+  /** Emphasised caption words (analyze.py --emphasis); drawn by the Emphasis composition. */
+  emphasis?: Emphasis[];
   pip?: Pip | null;
   /** Set when analyze.py --conform measured a conformed copy instead of the original (null otherwise). */
   conform?: Conform | null;
@@ -108,6 +127,12 @@ export type Options = {
   pipShape: "rounded" | "circle";
   /** Pip: play the camera's own audio too (off: the source's audio only). */
   pipAudio: boolean;
+  /** Emphasis: how an emphasised word shows when it is spoken (an entry's own style wins). */
+  emphasisStyle: EmphasisStyle;
+  /** Emphasis: speech bubbles (text from the user, never invented). */
+  bubbles: Bubble[];
+  /** Emphasis: comment-style cards (text and author from the user). */
+  comments: CommentCard[];
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -129,6 +154,9 @@ export const DEFAULT_OPTIONS: Options = {
   pipSize: 0.28,
   pipShape: "rounded",
   pipAudio: false,
+  emphasisStyle: "pop",
+  bubbles: [],
+  comments: [],
 };
 
 /** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */
