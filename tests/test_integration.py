@@ -679,5 +679,75 @@ class Conform(unittest.TestCase):
             self.assertTrue(list((Path(PROJECT) / "public" / "media").glob("*_pq_render.mp4")))
 
 
+def framemd5(path: Path):
+    """md5 of every decoded video frame (ffmpeg framemd5), test-side."""
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-f", "framemd5", "-"],
+                         capture_output=True, text=True, check=True).stdout
+    return [ln.rsplit(",", 1)[1].strip() for ln in out.splitlines() if ln.strip() and not ln.startswith("#")]
+
+
+def audio_md5(path: Path) -> str:
+    """md5 of the decoded audio, test-side."""
+    return subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a:0", "-f", "md5", "-"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+@unittest.skipUnless(HAVE and PROJECT, "needs ffmpeg, ffmpeg-skill and RFS_PROJECT (an installed project)")
+class Determinism(unittest.TestCase):
+    """The contract's repeatability claim (docs/adr/0001-render-determinism.md), checked on this machine: two
+    compositions rendered twice -- the second time with one browser tab -- and two stills, at the level the
+    contract states. A composition listed as not reproducible would be skipped here, by name."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="rfs-det-"))
+        cls.src = make_fixture(cls.tmp)
+        (cls.tmp / "cues.srt").write_text(SRT, encoding="utf-8")
+        cls.tl = cls.tmp / "fixture.timeline.json"
+        code, res = script("analyze", cls.src, "--captions", cls.tmp / "cues.srt", "-o", cls.tl)
+        assert code == 0, res
+        cls.c = _contract.build()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def hint(self, tool: str) -> str:
+        return next(t for t in self.c["tools"] if t["name"] == tool)["idempotency_hint"]
+
+    def test_render_twice_matches_at_the_stated_level(self):
+        level = self.hint("render")
+        self.assertIn(level, ("bit_exact", "content_equivalent"))
+        for comp in ("Captioned", "PeakPulse"):
+            if comp in self.c["determinism"]["not_reproducible_compositions"]:
+                continue
+            with self.subTest(comp=comp):
+                outs = []
+                for i, extra in enumerate(([], ["--concurrency", "1"])):
+                    out = self.tmp / f"det_{comp}_{i}.mp4"
+                    code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", self.tl,
+                                       "-o", out, "--fast", "--no-look", *extra)
+                    self.assertEqual(code, 0, res)
+                    self.assertTrue(res["verified"])
+                    outs.append(out)
+                a, b = (framemd5(o) for o in outs)
+                self.assertEqual(len(a), len(b))
+                differ = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+                self.assertEqual(differ, [], f"{comp}: frames differ between two renders")
+                self.assertEqual(audio_md5(outs[0]), audio_md5(outs[1]), f"{comp}: audio differs")
+                if level == "bit_exact":
+                    self.assertEqual(sha256(outs[0]), sha256(outs[1]), f"{comp}: files differ in bytes")
+
+    def test_still_twice_is_byte_identical(self):
+        self.assertEqual(self.hint("still"), "bit_exact")
+        shots = []
+        for i in range(2):
+            code, res = script("still", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                               "--at", "1", "--at", "5.5", "--out-dir", self.tmp / f"still_{i}")
+            self.assertEqual(code, 0, res)
+            shots.append([sha256(Path(p)) for p in res["outputs"]])
+        self.assertEqual(shots[0], shots[1])
+
+
 if __name__ == "__main__":
     unittest.main()

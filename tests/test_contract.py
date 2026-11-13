@@ -65,6 +65,45 @@ class Contract(unittest.TestCase):
         self.assertIn("render", dep["scripts"])
 
 
+class Repeatability(unittest.TestCase):
+    """Every tool states `deterministic` and `idempotency_hint` (docs/adr/0001-render-determinism.md); the
+    render level itself is measured by test_integration.Determinism."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.c = _contract.build()
+
+    def test_every_tool_states_it(self):
+        for t in self.c["tools"]:
+            with self.subTest(tool=t["name"]):
+                self.assertIsInstance(t["deterministic"], bool)
+                self.assertIn(t["idempotency_hint"], _contract.IDEMPOTENCY_HINTS)
+                # environment_dependent and deterministic exclude each other
+                self.assertEqual(t["deterministic"], t["idempotency_hint"] != "environment_dependent")
+
+    def test_the_levels_measured(self):
+        hints = {t["name"]: t["idempotency_hint"] for t in self.c["tools"]}
+        self.assertEqual(hints, {"analyze": "content_equivalent", "init": "content_equivalent",
+                                 "still": "bit_exact", "render": "bit_exact", "deliver": "bit_exact",
+                                 "pipeline": "content_equivalent", "doctor": "environment_dependent"})
+
+    def test_conditions_are_written_down(self):
+        d = self.c["determinism"]
+        self.assertEqual(d["hints"], list(_contract.IDEMPOTENCY_HINTS))
+        for key in ("scope", "holds", "does_not_hold", "unverified"):
+            self.assertTrue(d[key], key)
+        # a composition that is not reproducible is named, and only a real one
+        import _common
+        self.assertLessEqual(set(d["not_reproducible_compositions"]), set(_common.BUILTIN_COMPOSITIONS))
+        adr = (ROOT / "docs" / "adr" / "0001-render-determinism.md").read_text(encoding="utf-8")
+        for word in ("bit_exact", "content_equivalent", "Unverified", "--concurrency"):
+            self.assertIn(word, adr)
+
+    def test_contract_version_stays_1_0(self):
+        # the fields are additive; the agent treats a contract_version change as fatal drift
+        self.assertEqual(self.c["contract_version"], "1.0")
+
+
 class Outputs(unittest.TestCase):
     def test_every_tool_declares_result_and_dry_run_shapes(self):
         for name in _contract.TOOL_META:

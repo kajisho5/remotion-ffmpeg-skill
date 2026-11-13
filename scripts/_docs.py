@@ -37,6 +37,7 @@ def render() -> str:
                   f"- Verifies: {t['verification']}",
                   f"- ffmpeg-skill: {', '.join(t['ffmpeg_skill']) or '—'}",
                   f"- `--dry-run`: {'plans without writing' if t['dry_run'] else 'not applicable (reports only)'}",
+                  f"- Repeatability: `{t['idempotency_hint']}` (deterministic: {'yes' if t['deterministic'] else 'no'})",
                   "", "| Argument | Type | Default | Meaning |", "|---|---|---|---|"]
         for name, p in s["properties"].items():
             if name in ("dry_run", "overwrite", "timeout"):
@@ -59,6 +60,12 @@ def render() -> str:
                 lines.append(f"{title} (besides `status`, `dry_run`, `output`): " +
                              ", ".join(f"`{k}` ({v})" for k, v in keys.items()))
                 lines.append("")
+    d = c["determinism"]
+    lines += ["## Repeatability", "",
+              "`idempotency_hint` per tool: " + ", ".join(f"`{h}`" for h in d["hints"]) + ". Scope: " + d["scope"] + ".",
+              "", "Holds:", ""] + [f"- {x}" for x in d["holds"]] + ["", "Does not hold:", ""] + \
+             [f"- {x}" for x in d["does_not_hold"]] + ["", "Unverified:", ""] + [f"- {x}" for x in d["unverified"]] + \
+             ["", "Not reproducible: " + (", ".join(d["not_reproducible_compositions"]) or "none found") + ".", ""]
     lines += ["## Failures", "",
               "Every failure is one JSON object: " + ", ".join(f"`{k}` ({v})" for k, v in c["output_failure"].items()) + ".", ""]
     return "\n".join(lines)

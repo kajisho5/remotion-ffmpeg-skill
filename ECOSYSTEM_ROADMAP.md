@@ -5,7 +5,7 @@ Written from a read-only audit of this repository on 2026-10-30. Each step below
 
 ## Where it stands
 
-v0.13.0. analyze, init, still, render, deliver, pipeline, doctor; compositions BeatMontage, Captioned, Emphasis (step 10), Highlights, Jumpcut, Karaoke, PeakPulse, Pip, Titled. CI on 3 OSes. No determinism guarantee is on record yet (step 13). Delegates heavily to ffmpeg-skill.
+v0.13.0. analyze, init, still, render, deliver, pipeline, doctor; compositions BeatMontage, Captioned, Emphasis (step 10), Highlights, Jumpcut, Karaoke, PeakPulse, Pip, Titled. CI on 3 OSes. Determinism is stated per tool in the contract (step 13: `render` / `still` `bit_exact` on one machine and toolchain). Delegates heavily to ffmpeg-skill.
 
 ## What this repository owns
 
@@ -56,9 +56,10 @@ Wired in the agent as a CONFIRM `video.measured_motion` run as `pipeline` (step 
   - Why: a caller choosing between subtitle-skill, motion-graphics-skill and this skill for moving text reads one rule（なぜ要るか：動く文字をどのスキルで作るかを一か所に書く）
   - Done when: the decision is in docs/design-decisions.md with the decision linked, and SKILL.md's composition table points to it
   - Done ([#20](https://github.com/kajisho5/remotion-ffmpeg-skill/pull/20)): docs/design-decisions.md "Title and caption boundaries" records O9 and O11 with the Velisa decision linked; SKILL.md's composition table points to it and routes animated captions from subtitle cues alone to subtitle-skill. No contract change
-- [ ] **13. State the determinism guarantee** — the contract, SKILL.md and docs/design-decisions.md say nothing today about `deterministic` or `idempotency_hint` for `render`, `still` and `pipeline`. Measure it, then state it: render each composition twice on one machine and compare (framemd5 of video, md5 of audio), record what makes runs differ (Chromium version, GL backend, fonts staged, `--concurrency`, the encoder), and write the result into the contract as the sibling skills do (`deterministic`, `idempotency_hint: bit_exact | content_equivalent`) with the conditions in an ADR. A composition that is not reproducible is named, not hidden behind a skill-wide claim
+- [x] **13. State the determinism guarantee** — the contract, SKILL.md and docs/design-decisions.md say nothing today about `deterministic` or `idempotency_hint` for `render`, `still` and `pipeline`. Measure it, then state it: render each composition twice on one machine and compare (framemd5 of video, md5 of audio), record what makes runs differ (Chromium version, GL backend, fonts staged, `--concurrency`, the encoder), and write the result into the contract as the sibling skills do (`deterministic`, `idempotency_hint: bit_exact | content_equivalent`) with the conditions in an ADR. A composition that is not reproducible is named, not hidden behind a skill-wide claim
   - Why: the agent and qc-skill can only rely on a re-render matching when the guarantee is written down（なぜ要るか：再レンダーで同じ結果になるかを契約で約束し、検証できるようにする）
   - Done when: `contract --json` carries the fields for every tool; a CI test renders two compositions twice and checks the stated level; the ADR lists the conditions
+  - Done (PR_LINK): every tool carries `deterministic` and `idempotency_hint` (`render`, `still`, `deliver` `bit_exact`; `analyze`, `init`, `pipeline` `content_equivalent`; `doctor` `environment_dependent`) and the top-level `determinism` key lists the conditions, additively (`contract_version` stays 1.0). Measured: 92 renders, 4 pipeline runs and 72 stills on one machine, all byte-identical per configuration, `--concurrency` included; another Chromium build, GL backend or font changes the bytes. Cross-OS and GPU are unverified. [ADR 0001](docs/adr/0001-render-determinism.md); `test_integration.Determinism` runs on every CI OS. No composition is not reproducible
 
 ## Boundaries
 
