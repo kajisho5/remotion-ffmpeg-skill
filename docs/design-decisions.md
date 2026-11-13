@@ -31,4 +31,18 @@ Report one as a defect only if its reason no longer holds.
 | `references/scripts.md` is generated | it cannot drift from the parsers | `test_contract.Transport.test_generated_reference_is_current` |
 | ffmpeg-skill `>=2.0.0 <4.0.0` (3.x accepted) | ffmpeg-skill 3.0.0 removed Python 3.9 and FFmpeg 5.x, changed `cut.py`'s defaults and `contract_version` (2.0, for `cut.py`'s keys). This skill does not call `cut.py`, every flag it passes is still there (3.x promises none is removed), and CI already ran Python 3.12 with FFmpeg ≥ 6.1 | CI runs ffmpeg-skill main on every OS and 3.0.0, pinned by commit, on Linux; `test_contract` checks the range |
 
+
+## Title and caption boundaries
+
+Settled by the [Velisa ownership decisions 2026-11-12](https://github.com/kajisho5/Velisa/pull/156) (O9, O11; Velisa
+`docs/ecosystem/DECISION_LOG.md` D20, D22). A caller choosing a skill for moving text reads this rule. No contract change.
+
+- **Titles (O9).** `Titled`'s lower thirds and scene titles stay inside this skill's compositions. They are not offered as
+  a separate title product. Titles burned into a programme are motion-graphics-skill's (`タイトル・テロップ`); title and
+  stinger material files are hyperframes-skill's (`テロップ・スティンガー・ループ素材`).
+- **Captions (O11).** Caption effects timed to words are this skill's (`語の時刻に合わせた字幕演出`): `Captioned` with
+  `--words`, `Karaoke`, `Emphasis`. Animated captions made from subtitle cues alone (fade / pop / slide, karaoke without
+  word timings) are subtitle-skill's (`動く字幕(字幕キュー由来)`), which passes ffmpeg-skill `caption --animate` /
+  `--karaoke` through.
+
 The Japanese design memo with measurements is [`design.ja.md`](design.ja.md).

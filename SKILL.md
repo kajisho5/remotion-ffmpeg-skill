@@ -42,8 +42,11 @@ Changing the shape alone is not a reason: ffmpeg-skill's Reels / TikTok / Shorts
 
 ## Request → script / composition
 
+Moving text has three owners: word-timed caption effects are this skill's, animated captions from subtitle cues alone are subtitle-skill's, and `Titled`'s titles stay inside these compositions (burned-in titles: motion-graphics-skill; title and stinger material files: hyperframes-skill). See [docs/design-decisions.md](docs/design-decisions.md), "Title and caption boundaries".
+
 | Request | Run |
 |---|---|
+| animated captions from subtitle cues alone (fade / pop / slide, karaoke without word timings) | not this skill: subtitle-skill |
 | "animated captions / subtitles on this video" | `analyze.py --captions` → `render.py --comp Captioned` |
 | "cut the silences / jump cut / tighten this talk" (with motion) | `analyze.py` → `render.py --comp Jumpcut` (captions re-timed if given) |
 | "graphics that react to the audio / hit on the beat / on cuts" | `analyze.py [--beats]` → `render.py --comp PeakPulse` (pulses on beats when the grid was measured) |
