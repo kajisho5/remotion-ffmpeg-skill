@@ -15,6 +15,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 - Verifies: every number comes from ffmpeg-skill probe/scenes/silence; a VFR or HDR source is refused, or with --conform conformed and re-measured (CFR at the asked rate, SDR BT.709) before use; warnings for rotation and odd frame rates
 - ffmpeg-skill: probe, scenes, silence, join (several inputs), sync (--pip), fit (--conform: VFR -> CFR), color (--conform: HDR -> SDR)
 - `--dry-run`: plans without writing
+- Repeatability: `content_equivalent` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -57,6 +58,7 @@ Create a Remotion project with the built-in compositions (optionally npm install
 - Verifies: refuses a non-empty folder; npm install exit status
 - ffmpeg-skill: —
 - `--dry-run`: plans without writing
+- Repeatability: `content_equivalent` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -76,6 +78,7 @@ Render single frames as PNG to check the look before a full render.
 - Verifies: frames must lie inside the composition; view the PNGs
 - ffmpeg-skill: _contract doctor (CJK font lookup)
 - `--dry-run`: plans without writing
+- Repeatability: `bit_exact` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -106,6 +109,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 - Verifies: exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch
 - ffmpeg-skill: probe, look, overlay (--overlay; --place with --sparse), _contract doctor (CJK font lookup)
 - `--dry-run`: plans without writing
+- Repeatability: `bit_exact` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -144,6 +148,7 @@ Run an ffmpeg-skill delivery template (YouTube, Reels, ...) and its compliance c
 - Verifies: ffmpeg-skill check.py table; non-zero exit on any FAIL row
 - ffmpeg-skill: render --template, metadata (--chapters), check
 - `--dry-run`: plans without writing
+- Repeatability: `bit_exact` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -168,6 +173,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 - Verifies: each step's own verification
 - ffmpeg-skill: probe, scenes, silence, fit (--conform), color (--conform), look, render --template, check
 - `--dry-run`: plans without writing
+- Repeatability: `content_equivalent` (deterministic: yes)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
@@ -201,12 +207,43 @@ What this machine can do: Python, Node/npm, ffmpeg-skill, ffmpeg, a project's Re
 - Verifies: reports only
 - ffmpeg-skill: _contract doctor
 - `--dry-run`: not applicable (reports only)
+- Repeatability: `environment_dependent` (deterministic: no)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project` | string |  | Remotion project folder to inspect |
 
 --json result (besides `status`, `dry_run`, `output`): `ok` (bool), `version` (str), `checks` (list[{check, ok, value, fix}]), `ffmpeg_skill_doctor` (object|null)
+
+## Repeatability
+
+`idempotency_hint` per tool: `bit_exact`, `content_equivalent`, `environment_dependent`. Scope: same machine, same inputs (same paths, same options), same Remotion version, same Chromium (chrome-headless-shell) build and GL backend, same FFmpeg and ffmpeg-skill, same fonts.
+
+Holds:
+
+- every built-in composition renders twice to byte-identical files: per-frame md5 of the video, md5 of the audio and the file's sha256 match (render.py H.264, --fast, --codec prores, --overlay), in two separate runs
+- --concurrency does not change the output: 1 tab and all cores give the same bytes
+- still.py writes byte-identical PNGs
+- analyze.py run twice on the same file writes a byte-identical timeline.json; on a copy at another path only source.path differs
+- pipeline.py writes byte-identical render and deliverable files; it is content_equivalent, not bit_exact, because its timeline.json records the input's absolute path
+- init.py (without --install) writes an identical project folder
+
+Does not hold:
+
+- another Chromium build: chrome-headless-shell 153 and 156 differed on every frame (PSNR 43 dB average, 38 dB lowest), so after a Remotion or browser update compare by content, not by hash
+- another GL backend: Config.setChromiumOpenGlRenderer('swangle') in remotion.config.ts changed every frame (42 dB average); render.py sets none, and on a machine without a GPU the default, angle, egl, swiftshader and vulkan gave the same bytes
+- another font: --font-file with a different font changed the captions (29 dB average); the CJK auto font is whatever ffmpeg-skill finds installed
+- another input path: timeline.json records absolute paths, so its bytes differ (its numbers do not)
+
+Unverified:
+
+- across operating systems: CI checks each of Linux, macOS and Windows against itself only
+- on a machine with a GPU, where the GL backends may no longer agree
+- another FFmpeg or x264 build (the encoder Remotion bundles is pinned with Remotion)
+- across two machines with the same OS and toolchain
+- analyze.py --conform and several-input joins (their re-encoded copies were not compared); init.py --install
+
+Not reproducible: none found.
 
 ## Failures
 

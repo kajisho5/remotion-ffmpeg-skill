@@ -43,6 +43,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "ffmpeg_skill": ["probe", "scenes", "silence", "join (several inputs)", "sync (--pip)",
                          "fit (--conform: VFR -> CFR)", "color (--conform: HDR -> SDR)"],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "content_equivalent",
     },
     "init": {
         "role": "setup",
@@ -51,6 +53,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "verification": "refuses a non-empty folder; npm install exit status",
         "ffmpeg_skill": [],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "content_equivalent",
     },
     "still": {
         "role": "execution",
@@ -59,6 +63,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "verification": "frames must lie inside the composition; view the PNGs",
         "ffmpeg_skill": ["_contract doctor (CJK font lookup)"],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "bit_exact",
     },
     "render": {
         "role": "execution",
@@ -67,6 +73,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "verification": "exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch",
         "ffmpeg_skill": ["probe", "look", "overlay (--overlay; --place with --sparse)", "_contract doctor (CJK font lookup)"],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "bit_exact",
     },
     "deliver": {
         "role": "execution",
@@ -75,6 +83,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "verification": "ffmpeg-skill check.py table; non-zero exit on any FAIL row",
         "ffmpeg_skill": ["render --template", "metadata (--chapters)", "check"],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "bit_exact",
     },
     "pipeline": {
         "role": "orchestration",
@@ -84,6 +94,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "ffmpeg_skill": ["probe", "scenes", "silence", "fit (--conform)", "color (--conform)", "look",
                          "render --template", "check"],
         "dry_run": True,
+        "deterministic": True,
+        "idempotency_hint": "content_equivalent",
     },
     "doctor": {
         "role": "verification",
@@ -92,6 +104,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
         "verification": "reports only",
         "ffmpeg_skill": ["_contract doctor"],
         "dry_run": False,
+        "deterministic": False,
+        "idempotency_hint": "environment_dependent",
     },
 }
 
@@ -144,6 +158,45 @@ OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
                    "ffmpeg_skill_doctor": "object|null"},
         "dry_run": {},
     },
+}
+# What `deterministic` / `idempotency_hint` promise, and under which conditions (docs/adr/0001-render-determinism.md).
+# bit_exact: the same inputs give the same bytes. content_equivalent: the same content, but bytes that record where
+# it ran (absolute paths in timeline.json, the npm resolution of --install) may differ. environment_dependent: it
+# reports the machine. Measured, not assumed: tests/test_integration.Determinism renders two compositions twice on
+# every CI machine and checks the stated level.
+IDEMPOTENCY_HINTS = ("bit_exact", "content_equivalent", "environment_dependent")
+DETERMINISM = {
+    "scope": "same machine, same inputs (same paths, same options), same Remotion version, same Chromium "
+             "(chrome-headless-shell) build and GL backend, same FFmpeg and ffmpeg-skill, same fonts",
+    "holds": [
+        "every built-in composition renders twice to byte-identical files: per-frame md5 of the video, md5 of the "
+        "audio and the file's sha256 match (render.py H.264, --fast, --codec prores, --overlay), in two separate runs",
+        "--concurrency does not change the output: 1 tab and all cores give the same bytes",
+        "still.py writes byte-identical PNGs",
+        "analyze.py run twice on the same file writes a byte-identical timeline.json; on a copy at another path "
+        "only source.path differs",
+        "pipeline.py writes byte-identical render and deliverable files; it is content_equivalent, not bit_exact, "
+        "because its timeline.json records the input's absolute path",
+        "init.py (without --install) writes an identical project folder",
+    ],
+    "does_not_hold": [
+        "another Chromium build: chrome-headless-shell 153 and 156 differed on every frame (PSNR 43 dB average, "
+        "38 dB lowest), so after a Remotion or browser update compare by content, not by hash",
+        "another GL backend: Config.setChromiumOpenGlRenderer('swangle') in remotion.config.ts changed every frame "
+        "(42 dB average); render.py sets none, and on a machine without a GPU the default, angle, egl, "
+        "swiftshader and vulkan gave the same bytes",
+        "another font: --font-file with a different font changed the captions (29 dB average); the CJK auto font "
+        "is whatever ffmpeg-skill finds installed",
+        "another input path: timeline.json records absolute paths, so its bytes differ (its numbers do not)",
+    ],
+    "unverified": [
+        "across operating systems: CI checks each of Linux, macOS and Windows against itself only",
+        "on a machine with a GPU, where the GL backends may no longer agree",
+        "another FFmpeg or x264 build (the encoder Remotion bundles is pinned with Remotion)",
+        "across two machines with the same OS and toolchain",
+        "analyze.py --conform and several-input joins (their re-encoded copies were not compared); init.py --install",
+    ],
+    "not_reproducible_compositions": [],
 }
 SHARED_OUTPUT = {"status": "completed|failed", "dry_run": "bool", "output": "str|null (main artifact)"}
 FAILURE_OUTPUT = {"status": "failed", "error": "str", "kind": "input|missing_tool|timeout|failed", "dry_run": "bool"}
@@ -235,6 +288,8 @@ def tool_spec(name: str) -> Dict[str, Any]:
         "verification": meta["verification"],
         "ffmpeg_skill": meta["ffmpeg_skill"],
         "dry_run": meta["dry_run"],
+        "deterministic": meta["deterministic"],
+        "idempotency_hint": meta["idempotency_hint"],
         "inputSchema": input_schema(parser),
         "flags": flag_for(parser),
         "output": OUTPUTS[name],
@@ -273,6 +328,7 @@ def build() -> Dict[str, Any]:
         "roles": ROLES,
         "output_shared": SHARED_OUTPUT,
         "output_failure": FAILURE_OUTPUT,
+        "determinism": {"hints": list(IDEMPOTENCY_HINTS), **DETERMINISM},
         "conventions": {
             "output": "one JSON object on stdout with --json; human lines on stderr",
             "errors": {"input": 2, "missing_tool": 3, "timeout": 4, "failed": 1},
