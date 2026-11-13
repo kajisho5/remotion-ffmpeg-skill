@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0 — 2026-11-13
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- state the determinism guarantee in the contract (roadmap step 13) (#21)
+
+
 ## 0.13.0 — 2026-11-12
 
 _Automated release: version and notes from what was merged since the previous tag._
