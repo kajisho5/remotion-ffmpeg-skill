@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1 — 2026-11-19
+
+### Changed
+
+- `contract/contract.json`: the contract committed as a file (`python3 scripts/_contract.py --json` as one line with sorted keys, compact separators and a final newline), so a release's contract is `git show vX.Y.Z:contract/contract.json` without running the code. `python3 contract/generate.py` regenerates it; `--check` (a unit test, and the release job before it tags) fails when it is stale. The contract itself is unchanged apart from its version.
+
 ## 0.14.0 — 2026-11-13
 
 _Automated release: version and notes from what was merged since the previous tag._

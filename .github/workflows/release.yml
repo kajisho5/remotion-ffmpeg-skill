@@ -65,6 +65,9 @@ jobs:
           log = log.replace(head, head + "\n" + section, 1) if log.startswith(head) else section + log
           open("CHANGELOG.md", "w", encoding="utf-8").write(log)
           EOF
+          # contract/contract.json carries the version: regenerated after the bump so the tag's committed file is
+          # that tag's own contract output
+          python3 contract/generate.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "release: v$NEXT [skip ci]"
@@ -94,6 +97,11 @@ jobs:
               sys.exit(f"CHANGELOG.md has no '## {v}' section: add one in the PR that bumps the version")
           open("release-notes.md", "w", encoding="utf-8").write(m.group(1).strip() + "\n")
           EOF
+
+      # a hand-bumped version must come with its regenerated contract/contract.json
+      - name: Check the committed contract file
+        if: steps.v.outputs.release == 'true'
+        run: python3 contract/generate.py --check
 
       - name: Tag and GitHub Release
         if: steps.v.outputs.release == 'true'
