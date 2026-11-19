@@ -14,4 +14,4 @@ The release rule does not change. Unlabelled changes and docs / ci / chore-only 
 
 ## Consequences
 
-A release that fails the tests is not made; a later push retries. A version bumped by hand is not committed by the job and is tagged as before.
+A release that fails the tests is not made; a later push to main retries. A version bumped by hand is not committed by the job and is tagged as before.
