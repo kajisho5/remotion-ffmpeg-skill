@@ -6,12 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import _captions  # noqa: E402
 import _common  # noqa: E402
 import _sparse  # noqa: E402
 import analyze  # noqa: E402
 import render  # noqa: E402
+from tmp_dirs import tmp_dir  # noqa: E402
 
 
 def timeline(**over):
@@ -152,7 +154,7 @@ class Transcript(unittest.TestCase):
 
     def test_whisper_json_still_read_as_before(self):
         import tempfile
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="rfs-") as d:
             f = Path(d) / "whisper.json"
             f.write_text(Words.WHISPER, encoding="utf-8")
             r = _captions.read_word_timings(f)
@@ -331,8 +333,7 @@ class TemplateParity(unittest.TestCase):
 
 class Brand(unittest.TestCase):
     def setUp(self):
-        import tempfile
-        self.d = Path(tempfile.mkdtemp(prefix="rfs-brand-"))
+        self.d = tmp_dir(self, "rfs-brand-")
         (self.d / "fonts").mkdir()
         (self.d / "fonts" / "House.ttf").write_bytes(b"\0")
 
