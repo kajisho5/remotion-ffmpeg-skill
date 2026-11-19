@@ -116,7 +116,7 @@ class Outputs(unittest.TestCase):
         doc = run(ROOT / "scripts" / "doctor.py")
         self.assertEqual(_contract.missing_output_keys("doctor", doc), [])
         import tempfile
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="rfs-") as d:
             doc = run(ROOT / "scripts" / "init.py", Path(d) / "p", "--dry-run")
             self.assertEqual(_contract.missing_output_keys("init", doc), [])
             doc = run(ROOT / "scripts" / "render.py", "--project", Path(d) / "nope", "--comp", "Captioned",

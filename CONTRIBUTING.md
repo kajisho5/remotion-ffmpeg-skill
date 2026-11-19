@@ -19,6 +19,8 @@ RFS_PROJECT=/tmp/rfs-proj python3 -m unittest discover -s tests   # also real re
 cd templates/remotion-project && npm install && npx tsc --noEmit
 ```
 
+Tests make temporary directories only through `tests/tmp_dirs.py`'s `tmp_dir(owner, prefix)`, which always removes them (docs/adr/0002). `RFS_TEST_TMPDIR=DIR` moves them; `RFS_KEEP_TEST_TMP=1` keeps them for debugging.
+
 Test media is generated (lavfi test patterns and tones). Please keep sample text fictional: no real people, venues or projects.
 
 ## Releasing

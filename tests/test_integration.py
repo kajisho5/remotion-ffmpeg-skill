@@ -6,16 +6,17 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(ROOT / "tests"))
 import _common  # noqa: E402
 import _contract  # noqa: E402
 import analyze  # noqa: E402
+from tmp_dirs import tmp_dir  # noqa: E402
 
 HAVE = shutil.which("ffmpeg") and _common.find_ffmpeg_skill() is not None
 PROJECT = os.environ.get("RFS_PROJECT")
@@ -77,7 +78,7 @@ def script(name, *args):
 class Analyze(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="rfs-"))
+        cls.tmp = tmp_dir(cls, "rfs-")
         cls.src = make_fixture(cls.tmp)
         (cls.tmp / "cues.srt").write_text(SRT, encoding="utf-8")
         cls.tl = cls.tmp / "fixture.timeline.json"
@@ -529,7 +530,7 @@ class Conform(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="rfs-conform-"))
+        cls.tmp = tmp_dir(cls, "rfs-conform-")
         cls.vfr = make_vfr(cls.tmp)
         cls.pq = make_hdr(cls.tmp, "smpte2084", "pq.mp4")
         cls.hlg = make_hdr(cls.tmp, "arib-std-b67", "hlg.mp4")
@@ -700,7 +701,7 @@ class Determinism(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="rfs-det-"))
+        cls.tmp = tmp_dir(cls, "rfs-det-")
         cls.src = make_fixture(cls.tmp)
         (cls.tmp / "cues.srt").write_text(SRT, encoding="utf-8")
         cls.tl = cls.tmp / "fixture.timeline.json"
