@@ -13,6 +13,14 @@ class Bump(unittest.TestCase):
         self.assertEqual(rv.bump_for(["bug"], "feat: something"), "patch")
         self.assertEqual(rv.bump_for(["docs"], "update docs"), "none")
 
+    def test_dependency_pull_requests_release_a_patch(self):
+        # Velisa D37 addendum: a Dependabot pull request ships, as a patch, even with the bot's own major label.
+        self.assertEqual(rv.bump_for(["dependencies"], "chore(deps): bump x from 1.0.0 to 1.0.1"), "patch")
+        self.assertEqual(rv.bump_for(["dependencies", "github_actions"], "chore(deps): bump actions/checkout"), "patch")
+        self.assertEqual(rv.bump_for(["dependencies", "major"], "chore(deps): bump x from 1 to 2"), "patch")
+        self.assertEqual(rv.decide([{"subject": "chore(deps): bump x", "labels": ["dependencies"]},
+                                    {"subject": "docs", "labels": ["docs"]}])[0], "patch")
+
     def test_conventional_subjects_without_a_pr(self):
         self.assertEqual(rv.bump_for([], "feat: karaoke captions"), "minor")
         self.assertEqual(rv.bump_for([], "feat(render): all cores"), "minor")

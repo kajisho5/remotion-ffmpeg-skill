@@ -5,10 +5,12 @@
     python3 .github/scripts/resolve_version.py --notes F  # also writes a CHANGELOG section body to F
 
 Signals, per change since the tag (a merged PR, or a commit pushed straight to main):
-  PR labels   major -> refused (a major bump is a decision, made by hand)
+  PR labels   dependencies -> patch, whatever else it carries (Dependabot; its own major / minor
+                label is about the dependency, not this package; Velisa D37 addendum)
+              major -> refused (a major bump is a decision, made by hand)
               minor / feature / enhancement -> minor
               patch / fix / bug -> patch
-              chore / ci / docs / documentation / dependencies only -> nothing
+              chore / ci / docs / documentation only -> nothing
   commit subject (no PR) "feat:" / "feat(...):" -> minor, "fix:" -> patch, "BREAKING" -> refused
 Anything else counts for nothing, so an unlabelled push never releases by accident; a version
 bumped by hand in package.json always wins (the release workflow only calls this when the
@@ -31,6 +33,8 @@ class Refused(Exception):
 
 def bump_for(labels: List[str], subject: str) -> str:
     names = {l.lower() for l in labels}
+    if "dependencies" in names:
+        return "patch"
     if "major" in names or "BREAKING" in subject:
         raise Refused(f"a major change ({subject!r}): bump package.json by hand")
     found = [LABEL_BUMP[n] for n in names if n in LABEL_BUMP]
