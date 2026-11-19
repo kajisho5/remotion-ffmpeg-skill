@@ -48,7 +48,7 @@ class TmpDirs(unittest.TestCase):
             "        pass\n"
             "s = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(c) for c in (A, B)])\n"
             "r = unittest.TextTestRunner(stream=open(os.devnull, 'w')).run(s)\n"
-            "print(len(r.failures), len(r.errors), sorted(os.listdir(os.environ['RFS_TEST_TMPDIR'])))\n"
+            "print(len(r.failures), len(r.errors), sorted(os.listdir(os.environ['RFS_TEST_TMPDIR'])), flush=True)\n"
             "os._exit(0)\n"  # skip atexit: the cleanups alone must have removed them
         )
         r = self.child(code)
