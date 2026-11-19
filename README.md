@@ -84,7 +84,7 @@ Every script takes `--json`, `--dry-run`, `--overwrite`, `--timeout`, like ffmpe
 claude mcp add remotion-ffmpeg-skill -- python3 ~/.claude/skills/remotion-ffmpeg-skill/mcp/server.py
 ```
 
-Tool names and input schemas come from the machine-readable contract (`npx remotion-ffmpeg-skill contract --json`), generated from the scripts' own argument parsers.
+Tool names and input schemas come from the machine-readable contract (`npx remotion-ffmpeg-skill contract --json`), generated from the scripts' own argument parsers. `contract/contract.json` is the same contract committed as a file (`python3 scripts/_contract.py --json` as one line with sorted keys, compact separators and a final newline), so any release's contract is `git show vX.Y.Z:contract/contract.json`, with nothing installed or run; regenerate it with `python3 contract/generate.py` (a unit test fails when it is stale).
 
 ### Compositions
 
