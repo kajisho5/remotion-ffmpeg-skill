@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.2 — 2026-11-19
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- always remove the tests' temporary directories (ADR 0002) (#24)
+
+
 ## 0.14.1 — 2026-11-19
 
 ### Changed
