@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -265,6 +266,59 @@ def validate_timeline(t: Any) -> List[str]:
 
 def _finite(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+# velisa/timebase@1 (Velisa ADR-026; docs/adr/0004): a frame rate is an exact fraction. A decimal that is not an
+# integer and lies within 0.005 of base x 1000/1001 (base 24, 30, 48, 60, 120, 240) is that NTSC rate.
+NTSC_BASES = (24, 30, 48, 60, 120, 240)
+_DECIMAL_RE = re.compile(r"^\+?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
+_RATIONAL_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
+
+
+def exact_rate(value: Any) -> Optional[Fraction]:
+    """A frame rate as an exact fraction, or None when it is not one in (0, 1000] (rule TB-2): 'N/D' as written
+    (ffprobe's r_frame_rate; '2997/100' stays), an integer as N/1, an NTSC decimal (29.97, 23.976, 59.94) as N/1001,
+    never as 2997/100, any other decimal as its exact value; a float through its shortest text."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, Fraction):
+        r = value
+    elif isinstance(value, int):
+        r = Fraction(value)
+    else:
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return None
+            text = repr(value)
+        elif isinstance(value, str):
+            text = value.strip()
+        else:
+            return None
+        m = _RATIONAL_RE.match(text)
+        if m:
+            if int(m.group(2)) == 0:
+                return None
+            r = Fraction(int(m.group(1)), int(m.group(2)))
+        elif _DECIMAL_RE.match(text):
+            r = Fraction(text)
+            if r.denominator != 1:
+                r = next((Fraction(b * 1000, 1001) for b in NTSC_BASES
+                          if abs(r - Fraction(b * 1000, 1001)) <= Fraction(5, 1000)), r)
+        else:
+            return None
+    return r if 0 < r <= 1000 else None
+
+
+def stream_rate(v: Dict[str, Any], default: float = 30.0) -> float:
+    """The rate a timeline is drawn at, as the float of the exact fraction (TB-1, TB-2): ffprobe's r_frame_rate when
+    it is the stream's rate (within 0.001 of the probe's fps), else the probe's 3-decimal fps read by TB-2 (29.97 ->
+    30000/1001). The compositions and expected_frames() then multiply by 29.97002997..., not by 29.97: the file
+    Remotion writes carries 30000/1001, and a long timeline does not drift a frame every ~9 hours."""
+    fps = exact_rate(v.get("fps"))
+    r = exact_rate(v.get("r_frame_rate"))
+    if r is not None and (fps is None or abs(r - fps) < Fraction(1, 1000)):
+        return float(r)
+    return float(fps) if fps is not None else float(default)
 
 
 def sec_to_frames(seconds: float, fps: float) -> int:
