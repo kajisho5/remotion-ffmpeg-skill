@@ -460,6 +460,41 @@ class Analyze(unittest.TestCase):
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 
+class NtscRate(unittest.TestCase):
+    """velisa/timebase@1 (docs/adr/0004): a 30000/1001 source is drawn at 30000/1001, not at the probe's 29.97."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-ntsc-")
+        cls.src = cls.tmp / "ntsc.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30000/1001:duration=3",
+                        "-f", "lavfi", "-i", "sine=f=440:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                        "-shortest", str(cls.src)], check=True)
+        cls.tl = cls.tmp / "ntsc.timeline.json"
+        code, res = script("analyze", cls.src, "-o", cls.tl)
+        assert code == 0, res
+        cls.timeline = json.loads(cls.tl.read_text(encoding="utf-8"))
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_timeline_rate_is_the_exact_ntsc_rate(self):
+        self.assertEqual(self.timeline["source"]["fps"], 30000 / 1001)
+        self.assertEqual(_common.expected_frames("Captioned", self.timeline),
+                         _common.sec_to_frames(self.timeline["source"]["duration"], 30000 / 1001))
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_render_carries_30000_1001(self):
+        out = self.tmp / "ntsc-out.mp4"
+        code, res = script("render", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl, "-o", out, "--fast")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+        rate = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
+                               "-of", "default=nw=1:nk=1", str(out)], capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(rate, "30000/1001")
+
+
 def hdr_tags(transfer: str):
     """BT.2020 + PQ / HLG on the frames, the stream and in the H.264 VUI itself (FFmpeg 7+ no longer lets
     the output options alone override the untagged frames lavfi makes)."""

@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
-                     require_ffmpeg_skill, shell_join, version)
+                     require_ffmpeg_skill, shell_join, stream_rate, version)
 from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_emphasis,
                        read_word_timings, resolve_emphasis, youtube_chapter_warnings)
 
@@ -490,7 +490,7 @@ def main() -> None:
         pip = {"path": str(cam.resolve()), "name": cam.name,
                "duration": round(float(cv.get("duration") or cp.get("duration") or 0), 3),
                "width": int(cv.get("width") or 0), "height": int(cv.get("height") or 0),
-               "fps": float(cv.get("fps") or 0), "offset": 0.0, "confidence": None, "measured": False,
+               "fps": stream_rate(cv, 0.0), "offset": 0.0, "confidence": None, "measured": False,
                "conform": cam_conform}
         if a.pip_offset is not None:
             pip["offset"] = round(float(a.pip_offset), 4)
@@ -514,7 +514,7 @@ def main() -> None:
             "path": str(src.resolve()),
             "name": src.name,
             "duration": round(duration, 3),
-            "fps": float(v.get("fps") or 30.0),
+            "fps": stream_rate(v),
             "width": int(v.get("width") or 1920),
             "height": int(v.get("height") or 1080),
             "has_video": bool(video),
