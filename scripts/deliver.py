@@ -11,14 +11,16 @@ Examples:
 """
 import argparse
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _captions import parse_chapters
-from _common import (STATE, add_common, apply_common, default_output, die, emit, ffskill, ffskill_cmd, info,
-                     refuse_existing, require_ffmpeg_skill, shell_join)
+from _common import (STATE, add_common, apply_common, default_output, die, emit, ffmpeg_skill_version, ffskill,
+                     ffskill_cmd, info, refuse_existing, require_ffmpeg_skill, shell_join)
 
 # ffmpeg-skill's templates/*.json names (render.py --list-templates).
 PLATFORMS = ["youtube", "youtube-shorts", "shorts", "reels", "tiktok", "x", "facebook", "linkedin", "podcast", "audiogram"]
@@ -37,6 +39,37 @@ def brand_logo(brand: Optional[str]) -> Optional[Path]:
         return None
     lp = Path(logo).expanduser()
     return lp if lp.is_absolute() else bp.resolve().parent / lp
+
+
+def template_runs_content_check() -> bool:
+    """ffmpeg-skill 4.0.0 (#575) made a delivery template's check stage also run check.py --content (black frames,
+    freezes, flashes, silence), and a failed row fails the render. A Remotion deliverable often holds a still picture
+    on purpose (a title card, a slide), which 4.0 reads as `frozen`. deliver keeps 3.x's template (platform rows
+    only); its own check.py --platform still runs on the result (docs/design-decisions.md)."""
+    version = ffmpeg_skill_version(require_ffmpeg_skill()) or ""
+    try:
+        return int(version.split(".")[0]) >= 4
+    except ValueError:
+        return False
+
+
+def render_template(args: List[str], commands: List[str]) -> None:
+    """render.py --template with args; on ffmpeg-skill 4.x through --write-project with the check stage's
+    `content` set to false (the migration ffmpeg-skill's docs/contract.md gives), so only the platform rows run."""
+    if not template_runs_content_check():
+        commands.append(ffskill("render", args)["_command"])
+        return
+    work = Path(tempfile.mkdtemp(prefix="rfs-deliver-"))
+    try:
+        project = work / "project.json"
+        commands.append(ffskill("render", [*args, "--write-project", str(project)])["_command"])
+        proj = json.loads(project.read_text(encoding="utf-8"))
+        if isinstance(proj.get("check"), dict):
+            proj["check"]["content"] = False
+        project.write_text(json.dumps(proj, indent=2) + "\n", encoding="utf-8")
+        commands.append(ffskill("render", [str(project)] + (["--overwrite"] if "--overwrite" in args else []))["_command"])
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def youtube_description(chapters_file: Path) -> str:
@@ -86,7 +119,8 @@ def main() -> None:
         out = Path(a.output).expanduser() if a.output else default_output(src, f"_{a.platform}", ".mp4")
         refuse_existing(out)
         templated = out.with_name(out.stem + ".nochapters" + out.suffix) if a.chapters else out
-        args = ["--template", a.platform, str(src), "-o", str(templated)]
+        # absolute paths: on ffmpeg-skill 4.x the filled project is rendered from a temporary directory
+        args = ["--template", a.platform, str(src.resolve()), "-o", str(templated.resolve())]
         if a.brand:
             bp = Path(a.brand).expanduser().resolve()
             if not bp.is_file():
@@ -103,14 +137,18 @@ def main() -> None:
         meta_args = ([str(templated), "--chapters", str(Path(a.chapters).expanduser()), "-o", str(out)]
                      + (["--overwrite"] if STATE.overwrite else [])) if a.chapters else []
         if STATE.dry_run:
-            commands.append(shell_join(ffskill_cmd("render", args)))
+            if template_runs_content_check():
+                project = "<tmp>/project.json"
+                commands.append(shell_join(ffskill_cmd("render", [*args, "--write-project", project])))
+                commands.append(shell_join(ffskill_cmd("render", [project] + (["--overwrite"] if "--overwrite" in args else []))))
+            else:
+                commands.append(shell_join(ffskill_cmd("render", args)))
             if a.chapters:
                 commands.append(shell_join(ffskill_cmd("metadata", meta_args)))
             commands.append(shell_join(ffskill_cmd("check", [str(out), "--platform", a.platform])))
             emit({"output": str(out), "commands": commands}, f"would deliver {out}")
             return
-        r = ffskill("render", args)
-        commands.append(r["_command"])
+        render_template(args, commands)
         if a.chapters:
             m = ffskill("metadata", meta_args)
             commands.append(m["_command"])

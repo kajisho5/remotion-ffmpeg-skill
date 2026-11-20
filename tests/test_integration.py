@@ -334,6 +334,20 @@ class Analyze(unittest.TestCase):
         self.assertIn("--logo", res["commands"][0])
         self.assertIn(str((bdir / "logo.png").resolve()), res["commands"][0])
 
+    def test_deliver_keeps_a_deliberate_still_picture(self):
+        # ffmpeg-skill 4.0's templates also run check.py --content, whose `frozen` row fails a picture held on purpose
+        # (a title card); deliver keeps the platform rows only on every version (docs/design-decisions.md)
+        still = self.tmp / "still.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x1E6F8E:s=1280x720:r=30:d=4",
+                        "-f", "lavfi", "-i", "sine=f=440:d=4", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", str(still)], check=True)
+        out = self.tmp / "still_youtube.mp4"
+        code, res = script("deliver", still, "--platform", "youtube", "-o", out)
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"], res)
+        self.assertTrue(out.is_file())
+        self.assertNotIn("frozen", [c["check"] for c in res["checks"]])
+
     def test_deliver_without_chapters(self):
         out = self.tmp / "plain_youtube.mp4"
         code, res = script("deliver", self.src, "--platform", "youtube", "-o", out)
