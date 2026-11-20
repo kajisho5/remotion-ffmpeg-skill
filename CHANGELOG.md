@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.3 — 2026-11-20
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- NtscRate skips without FFmpeg like the other media classes, so the release commit can be tested (ADR 0005) (#30)
+- draw at the exact stream rate (30000/1001, not 29.97) by velisa/timebase@1 (#29)
+
+
 ## 0.14.2 — 2026-11-19
 
 _Automated release: version and notes from what was merged since the previous tag._
