@@ -460,6 +460,7 @@ class Analyze(unittest.TestCase):
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
 class NtscRate(unittest.TestCase):
     """velisa/timebase@1 (docs/adr/0004): a 30000/1001 source is drawn at 30000/1001, not at the probe's 29.97."""
 

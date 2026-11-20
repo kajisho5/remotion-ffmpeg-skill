@@ -1,4 +1,5 @@
 """Release version resolution (.github/scripts/resolve_version.py): pure decisions, no network."""
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -65,6 +66,22 @@ class ReleaseWorkflowOrder(unittest.TestCase):
         for push in pushes:
             self.assertLess(test_step, push)
         self.assertIn("python3 -m unittest discover -s tests", text[test_step:pushes[0]])
+
+    def test_media_test_classes_skip_without_ffmpeg(self):
+        # The release step runs without FFmpeg (ADR 0003). A class that makes media in setUpClass needs a class-level
+        # skip guard, or setUpClass raises before any per-test skip is read (ADR 0005). CI installs FFmpeg and runs them.
+        source = (Path(__file__).resolve().parent / "test_integration.py").read_text(encoding="utf-8")
+        unguarded = []
+        for node in ast.parse(source).body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not any(isinstance(f, ast.FunctionDef) and f.name == "setUpClass" for f in node.body):
+                continue
+            guards = [d for d in node.decorator_list if isinstance(d, ast.Call) and ast.unparse(d.func) == "unittest.skipUnless"
+                      and "HAVE" in ast.unparse(d.args[0])]
+            if not guards:
+                unguarded.append(node.name)
+        self.assertEqual(unguarded, [])
 
 
 if __name__ == "__main__":
