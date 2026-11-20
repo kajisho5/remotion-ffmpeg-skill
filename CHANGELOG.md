@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.4 — 2026-11-20
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- accept ffmpeg-skill 4.x (>=2.0.0 <5.0.0) (#31)
+
+
 ## 0.14.3 — 2026-11-20
 
 _Automated release: version and notes from what was merged since the previous tag._
