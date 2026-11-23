@@ -12,7 +12,7 @@ from deliver import kit_projection
 
 class BrandDelivery(unittest.TestCase):
     def test_shared_composition_look_and_projected_delivery(self):
-        root = tmp_dir(self, "rfs-kit-")
+        root = tmp_dir(self, "rfs-kit-").resolve()
         (root / "font.ttf").touch()
         kit = root / "kit.json"
         data = {"schema": "velisa/kit@1", "name": "Example", "colours": {"primary": "FFD200", "secondary": "EEEEEE"},
