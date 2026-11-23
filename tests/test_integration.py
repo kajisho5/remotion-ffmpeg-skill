@@ -348,6 +348,29 @@ class Analyze(unittest.TestCase):
         self.assertTrue(out.is_file())
         self.assertNotIn("frozen", [c["check"] for c in res["checks"]])
 
+    def test_deliver_with_british_spelling_kit(self):
+        brand = Path(__file__).parent / "fixtures" / "colours-british-spelling.json"
+        original = brand.read_bytes()
+        code, result = script("deliver", self.src, "--platform", "youtube", "--brand", brand,
+                              "-o", self.tmp / "kit_youtube.mp4")
+        self.assertEqual(code, 0, result)
+        self.assertTrue(result["verified"], result)
+        self.assertEqual(brand.read_bytes(), original)
+
+    def test_still_and_render_share_the_projected_delivery_look(self):
+        from deliver import kit_projection
+        brand = Path(__file__).parent / "fixtures" / "colours-british-spelling.json"
+        native = self.tmp / "projected-brand.json"
+        native.write_text(json.dumps(kit_projection(brand)), encoding="utf-8")
+        project = self.tmp / "brand-project"
+        self.assertEqual(script("init", project)[0], 0)
+        common = ["--project", project, "--timeline", self.tl, "--comp", "Captioned", "--dry-run"]
+        code, rendered = script("render", *common, "--brand", native, "-o", self.tmp / "brand-video.mp4")
+        self.assertEqual(code, 0, rendered)
+        code, still = script("still", *common, "--brand", brand, "--frame", "0")
+        self.assertEqual(code, 0, still)
+        self.assertIn(Path(rendered["props"]).name, still["commands"][0])
+
     def test_deliver_without_chapters(self):
         out = self.tmp / "plain_youtube.mp4"
         code, res = script("deliver", self.src, "--platform", "youtube", "-o", out)

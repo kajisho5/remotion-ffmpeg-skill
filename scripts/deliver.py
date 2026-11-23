@@ -41,6 +41,45 @@ def brand_logo(brand: Optional[str]) -> Optional[Path]:
     return lp if lp.is_absolute() else bp.resolve().parent / lp
 
 
+def kit_projection(path: Path) -> Optional[dict]:
+    """Project a Velisa kit for delivery (ADR-030); native brand files go to the engine unchanged."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        die(f"cannot read brand file {path}: {exc}", "input")
+    if not isinstance(data, dict):
+        die(f"{path} must hold a JSON object", "input")
+    if "colours" not in data and data.get("schema") != "velisa/kit@1":
+        return None
+    if "colors" in data and "colours" in data:
+        die(f"{path} defines both colors and colours", "input")
+
+    def subset(obj, keys):
+        if not isinstance(obj, dict):
+            die(f"expected an object in brand file {path}", "input")
+        return {key: obj[key] for key in keys if key in obj}
+
+    brand = subset(data, ("font", "font_file", "logo", "logo_position", "logo_scale", "logo_opacity",
+                          "safe_margin", "lang"))
+    for key in ("logo", "font_file"):
+        if key in brand:
+            if not isinstance(brand[key], str) or not brand[key]:
+                die(f"{path}: {key} must be a non-empty path", "input")
+            brand[key] = str((path.parent / Path(brand[key]).expanduser()).resolve())
+    colors = "colors" if "colors" in data else "colours"
+    if colors in data:
+        brand["colors"] = subset(data[colors], ("primary", "text", "outline", "background", "accent"))
+    if "caption" in data:
+        brand["caption"] = subset(data["caption"], ("size", "position", "animate", "karaoke", "bold", "outline"))
+    if "styles" in data:
+        styles = subset(data["styles"], ("caption",))
+        if "caption" in styles:
+            brand["styles"] = {"caption": subset(styles["caption"], ("font", "size", "colour", "color", "box", "position"))}
+    if "loudness" in data:
+        brand["loudness"] = subset(data["loudness"], ("lufs", "tp"))
+    return brand
+
+
 def template_runs_content_check() -> bool:
     """ffmpeg-skill 4.0.0 (#575) made a delivery template's check stage also run check.py --content (black frames,
     freezes, flashes, silence), and a failed row fails the render. A Remotion deliverable often holds a still picture
@@ -121,11 +160,14 @@ def main() -> None:
         templated = out.with_name(out.stem + ".nochapters" + out.suffix) if a.chapters else out
         # absolute paths: on ffmpeg-skill 4.x the filled project is rendered from a temporary directory
         args = ["--template", a.platform, str(src.resolve()), "-o", str(templated.resolve())]
+        projection = None
         if a.brand:
             bp = Path(a.brand).expanduser().resolve()
             if not bp.is_file():
                 die(f"brand file not found: {a.brand}", "input")
-            args += ["--brand", str(bp)]
+            projection = kit_projection(bp)
+            if projection is None:
+                args += ["--brand", str(bp)]
         logo = Path(a.logo).expanduser() if a.logo else brand_logo(a.brand)
         if logo:
             if not logo.is_file():
@@ -137,6 +179,8 @@ def main() -> None:
         meta_args = ([str(templated), "--chapters", str(Path(a.chapters).expanduser()), "-o", str(out)]
                      + (["--overwrite"] if STATE.overwrite else [])) if a.chapters else []
         if STATE.dry_run:
+            if projection is not None:
+                args += ["--brand", "<tmp>/brand.json"]
             if template_runs_content_check():
                 project = "<tmp>/project.json"
                 commands.append(shell_join(ffskill_cmd("render", [*args, "--write-project", project])))
@@ -148,7 +192,13 @@ def main() -> None:
             commands.append(shell_join(ffskill_cmd("check", [str(out), "--platform", a.platform])))
             emit({"output": str(out), "commands": commands}, f"would deliver {out}")
             return
-        render_template(args, commands)
+        if projection is None:
+            render_template(args, commands)
+        else:
+            with tempfile.TemporaryDirectory(prefix="rfs-kit-") as directory:
+                projected = Path(directory) / "brand.json"
+                projected.write_text(json.dumps(projection) + "\n", encoding="utf-8")
+                render_template([*args, "--brand", str(projected)], commands)
         if a.chapters:
             m = ffskill("metadata", meta_args)
             commands.append(m["_command"])
