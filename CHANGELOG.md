@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.5 — 2026-11-24
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Fixed
+
+- project kit@1 brands for ffmpeg-skill delivery (#33)
+
+
 ## 0.14.4 — 2026-11-20
 
 _Automated release: version and notes from what was merged since the previous tag._
