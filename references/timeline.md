@@ -153,5 +153,5 @@ Besides the composite, each graphic group is drawn alone on a transparent, full 
 | `base` | what the layers go over: `source` (the video, or null), `background` (a blank's or audio-only source's background colour), `fit` |
 | `layers[]` | bottom first: `group`, `order`, `file` (null when nothing of the group shows; then `skipped` says so), `position` (`{x, y, width, height}`: full frame at 0,0), `times` (`[{start, end, from_frame, end_frame}]`, where the group draws), `codec`, `pix_fmt`, `frames` |
 
-Every layer is checked against the composite (ffmpeg-skill probe: frame count, size, a pixel format with alpha). Stacked over the base in order, the layers give back the composite. The fixture measures at least 45 dB PSNR on every frame (`test_integration.StylesAndLayers`).
+Every layer is checked against the composite (ffmpeg-skill probe: frame count, size, a pixel format with alpha). Stacked over the base in order, the layers give back the composite. The fixture measures at least 40 dB PSNR on every frame (`test_integration.StylesAndLayers`).
 
