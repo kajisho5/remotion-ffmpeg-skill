@@ -69,7 +69,8 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
     "render": {
         "role": "execution",
         "summary": "Render a composition from a timeline, verify it (frames, fps, size, audio) and write a contact sheet.",
-        "writes": "video file (+ contact sheet PNG)",
+        "writes": "video file (+ contact sheet PNG; with --layers one ProRes 4444 .mov per graphic group and a "
+                  "layers.json manifest)",
         "verification": "exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch",
         "ffmpeg_skill": ["probe", "look", "overlay (--overlay; --place with --sparse)", "_contract doctor (CJK font lookup)"],
         "dry_run": True,
@@ -135,10 +136,12 @@ OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
                    "summary": "str", "frame": "object|null", "font": "str|null", "mode": "full|overlay",
                    "graphics": "str|null (kept ProRes 4444 layer)",
                    "sparse": "null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)",
+                   "layers": "null|{manifest, files} (--layers: the layers@1 manifest and the ProRes 4444 files)",
                    "kind": "null|failed",
                    "error": "null|str (which verification rows failed)"},
         "dry_run": {"commands": "list[str]", "props": "str", "expected_frames": "int|null", "frame": "object|null",
-                    "font": "str|null", "sparse": "null|object (--sparse)"},
+                    "font": "str|null", "sparse": "null|object (--sparse)",
+                    "layers": "null|list[str] (--layers: the groups that would be written)"},
     },
     "deliver": {
         "result": {"checked": "str", "platform": "str|null", "verified": "bool",

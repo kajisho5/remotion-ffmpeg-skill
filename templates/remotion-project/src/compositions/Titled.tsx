@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
 import { useStagedFont } from "../lib/useStagedFont";
-import { Props, chapterCardFrames, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
+import { Props, showLayer, chapterCardFrames, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
 
 /**
  * Titled: the source, full length, with lower thirds the user wrote (options.lowerThirds), a
@@ -22,7 +22,7 @@ export const Titled: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
-      {sceneCards.map(({ sc, text }, i) => {
+      {(showLayer(props, "sceneTitles") ? sceneCards : []).map(({ sc, text }, i) => {
         const from = secToFrames(sc.start, fps);
         const dur = Math.max(1, Math.min(secToFrames(sc.end, fps), from + Math.round(fps * 2.5)) - from);
         return (
@@ -31,7 +31,7 @@ export const Titled: React.FC<Props> = (props) => {
           </Sequence>
         );
       })}
-      {o.chapterSeconds > 0
+      {o.chapterSeconds > 0 && showLayer(props, "chapters")
         ? (timeline.chapters ?? []).map((ch, i, all) => {
             const [from, dur] = chapterCardFrames(ch, fps, o.chapterSeconds);
             return (
@@ -41,7 +41,7 @@ export const Titled: React.FC<Props> = (props) => {
             );
           })
         : null}
-      {o.lowerThirds.map((lt, i) => {
+      {(showLayer(props, "lowerThirds") ? o.lowerThirds : []).map((lt, i) => {
         const from = secToFrames(lt.start, fps);
         const dur = Math.max(1, secToFrames(lt.end, fps) - from);
         return (

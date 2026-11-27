@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
 import { useStagedFont } from "../lib/useStagedFont";
-import { Props, fontStack, outputFrame, resolveOptions, secToFrames, type KineticLine, type Options } from "../timeline";
+import { Props, showLayer, fontStack, outputFrame, resolveOptions, secToFrames, type KineticLine, type Options } from "../timeline";
 
 /**
  * KineticType: the caption cues' words (or CJK characters) entering one by one at the times analyze.py
@@ -24,7 +24,7 @@ export const KineticType: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
-      {line ? <Line line={line} o={o} fontFamily={family} /> : null}
+      {line && showLayer(props, "text") ? <Line line={line} o={o} fontFamily={family} /> : null}
     </AbsoluteFill>
   );
 };

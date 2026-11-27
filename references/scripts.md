@@ -99,6 +99,7 @@ Render single frames as PNG to check the look before a full render.
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
+| `--style` | string: swiss / minimal / neon / glitch / wafu / corporate |  | a look in one word: an options bundle (colours, font, background, sizes, the kinetic and visualizer styles). --brand wins over it key by key, and --options over both |
 | `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
 | `--gl` | string: angle / egl / swiftshader / swangle / vulkan / angle-egl |  | Chromium's OpenGL backend for Remotion (default: swangle -- software WebGL, works without a GPU -- for ThreeScene, none for the other compositions: Chrome's choice; angle uses a GPU). Another backend changes the pixels; doctor.py names the one in use |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
@@ -112,7 +113,7 @@ Render single frames as PNG to check the look before a full render.
 Render a composition from a timeline, verify it (frames, fps, size, audio) and write a contact sheet.
 
 - Role: execution — writes a new media artifact; inputs are never modified
-- Writes: video file (+ contact sheet PNG)
+- Writes: video file (+ contact sheet PNG; with --layers one ProRes 4444 .mov per graphic group and a layers.json manifest)
 - Verifies: exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch
 - ffmpeg-skill: probe, look, overlay (--overlay; --place with --sparse), _contract doctor (CJK font lookup)
 - `--dry-run`: plans without writing
@@ -133,19 +134,21 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--no-look` | boolean |  | skip the contact sheet |
 | `--overlay` | boolean |  | draw the graphics only as a transparent ProRes 4444 layer and composite it over the untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut) |
 | `--keep-graphics` | boolean |  | with --overlay: keep the transparent graphics .mov |
+| `--layers` | boolean |  | also write each graphic group (captions, lower thirds, bubbles, ...) as its own transparent ProRes 4444 .mov, full frame, in <output>.layers/, with a manifest <output>.layers.json (the times each shows, its position and stacking order) beside the composite, for After Effects or an NLE (Captioned, Karaoke, Titled, Emphasis, KineticType) |
 | `--sparse` | boolean |  | overlay mode that draws only the frames where something shows (Captioned / Karaoke / Titled) and places each stretch at its time with ffmpeg-skill overlay.py --place: much faster on long footage with gaps between captions. Falls back to the full-length layer (and says why) when this ffmpeg-skill has no --place or the source does not start at 0 |
 | `--merge-gap` | number | `2.0` | with --sparse: graphics closer than this many seconds are drawn as one stretch (default 2) |
 | `--aspect` | string: source / 16:9 / 9:16 / 1:1 / 4:5 / 4:3 |  | output shape (default: the source's own). 9:16 for Reels/TikTok/Shorts, 1:1, 4:5, 16:9 |
 | `--width` | integer |  | output width in px (default: keep the source's short side) |
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
+| `--style` | string: swiss / minimal / neon / glitch / wafu / corporate |  | a look in one word: an options bundle (colours, font, background, sizes, the kinetic and visualizer styles). --brand wins over it key by key, and --options over both |
 | `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
 | `--gl` | string: angle / egl / swiftshader / swangle / vulkan / angle-egl |  | Chromium's OpenGL backend for Remotion (default: swangle -- software WebGL, works without a GPU -- for ThreeScene, none for the other compositions: Chrome's choice; angle uses a GPU). Another backend changes the pixels; doctor.py names the one in use |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
---json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `sparse` (null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)), `kind` (null|failed), `error` (null|str (which verification rows failed))
+--json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `sparse` (null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)), `layers` (null|{manifest, files} (--layers: the layers@1 manifest and the ProRes 4444 files)), `kind` (null|failed), `error` (null|str (which verification rows failed))
 
---dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `props` (str), `expected_frames` (int|null), `frame` (object|null), `font` (str|null), `sparse` (null|object (--sparse))
+--dry-run --json result (besides `status`, `dry_run`, `output`): `commands` (list[str]), `props` (str), `expected_frames` (int|null), `frame` (object|null), `font` (str|null), `sparse` (null|object (--sparse)), `layers` (null|list[str] (--layers: the groups that would be written))
 
 ## deliver.py
 
@@ -192,6 +195,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |
 | `--brand` | string |  | ffmpeg-skill brand.json: the look of the graphics and, on delivery, the logo |
+| `--style` | string: swiss / minimal / neon / glitch / wafu / corporate |  | a look in one word (render.py --style): --brand and --options win over it key by key |
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |
 | `--out-dir` | string |  | where the timeline, render and deliverable go (default: next to the input) |
 | `--beats` | boolean |  | measure the beat grid too |

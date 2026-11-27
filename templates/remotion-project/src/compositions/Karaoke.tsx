@@ -3,7 +3,7 @@ import { AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoC
 import { SourceVideo } from "../lib/SourceVideo";
 import { useStagedFont } from "../lib/useStagedFont";
 import { captionMarginPx } from "./Captioned";
-import { Props, fontStack, outputFrame, resolveOptions, secToFrames, type Caption, type Options } from "../timeline";
+import { Props, showLayer, fontStack, outputFrame, resolveOptions, secToFrames, type Caption, type Options } from "../timeline";
 
 /**
  * Karaoke: each caption cue with its words lit one by one at the times the speech engine measured
@@ -20,7 +20,7 @@ export const Karaoke: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
-      {timeline.captions.map((c, i) => {
+      {(showLayer(props, "captions") ? timeline.captions : []).map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
         // Words that belong to this cue: their midpoint falls inside it.
@@ -60,7 +60,7 @@ export const KaraokeCue: React.FC<{ cue: Caption; words: Caption[]; len: number;
           maxWidth: width * 0.88,
           padding: `${size * 0.25}px ${size * 0.55}px`,
           borderRadius: size * 0.3,
-          background: "rgba(0,0,0,0.6)",
+          background: o.captionBox ?? "rgba(0,0,0,0.6)",
           fontFamily,
           fontWeight: 800,
           fontSize: size,

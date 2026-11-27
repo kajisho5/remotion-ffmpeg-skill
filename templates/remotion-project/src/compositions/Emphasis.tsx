@@ -5,6 +5,7 @@ import { useStagedFont } from "../lib/useStagedFont";
 import { captionMarginPx } from "./Captioned";
 import {
   Props,
+  showLayer,
   fontStack,
   outputFrame,
   resolveOptions,
@@ -40,7 +41,7 @@ export const Emphasis: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
-      {timeline.captions.map((c, i) => {
+      {(showLayer(props, "captions") ? timeline.captions : []).map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
         return (
@@ -56,7 +57,7 @@ export const Emphasis: React.FC<Props> = (props) => {
           </Sequence>
         );
       })}
-      {o.bubbles.map((b, i) => {
+      {(showLayer(props, "bubbles") ? o.bubbles : []).map((b, i) => {
         const from = secToFrames(b.start, fps);
         const dur = Math.max(1, secToFrames(b.end, fps) - from);
         return (
@@ -65,7 +66,7 @@ export const Emphasis: React.FC<Props> = (props) => {
           </Sequence>
         );
       })}
-      {o.comments.map((c, i) => {
+      {(showLayer(props, "comments") ? o.comments : []).map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
         const slot = slots[i];
@@ -126,7 +127,7 @@ const EmphasisCue: React.FC<{
           maxWidth: width * 0.88,
           padding: `${size * 0.25}px ${size * 0.55}px`,
           borderRadius: size * 0.3,
-          background: "rgba(0,0,0,0.6)",
+          background: o.captionBox ?? "rgba(0,0,0,0.6)",
           color: o.textColor,
           fontFamily,
           fontWeight: 800,

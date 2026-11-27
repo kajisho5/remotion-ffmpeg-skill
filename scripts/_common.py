@@ -569,7 +569,7 @@ def resolve_font(project: Path, timeline: Dict[str, Any], font_file: Optional[st
 
 def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dict[str, Any],
                 frame: Optional[Dict[str, Any]] = None, font: Optional[Dict[str, str]] = None,
-                overlay: bool = False) -> Tuple[Path, Dict[str, Any]]:
+                overlay: bool = False, layer: Optional[str] = None) -> Tuple[Path, Dict[str, Any]]:
     t = json.loads(json.dumps(timeline))
     src = t["source"].get("path")
     has_media = t["source"].get("has_video", True) or t["source"].get("has_audio", False)
@@ -577,6 +577,8 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
     if t.get("pip") and comp == "Pip":
         t["pip"]["src"] = stage_source(project, t["pip"]["path"])
     props = {"timeline": t, "options": options, "frame": frame, "font": font, "overlay": overlay}
+    if layer is not None:
+        props["layer"] = layer      # render.py --layers: this graphic group only
     # Named by content: two renders running at once (different sources, shapes or options) never
     # overwrite each other's props, and identical props share one file harmlessly.
     digest = hashlib.sha1(json.dumps(props, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:10]
@@ -585,6 +587,10 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")
     return path, props
+
+
+# The --style presets (scripts/_looks.py STYLES holds their options).
+STYLE_NAMES = ("swiss", "minimal", "neon", "glitch", "wafu", "corporate")
 
 
 # Chromium's OpenGL backends Remotion accepts (--gl). None = Remotion's own default (4.x: none passed, Chrome
@@ -606,6 +612,9 @@ def add_frame_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--fit", choices=FITS, help="how the source fills another shape: blur (default when the shape "
                                                 "changes), contain (bars) or cover (crop)")
     g.add_argument("--font-file", help="caption font file (.ttf/.otf/.ttc/.woff2), staged into the project")
+    g.add_argument("--style", choices=STYLE_NAMES,
+                   help="a look in one word: an options bundle (colours, font, background, sizes, the kinetic and "
+                        "visualizer styles). --brand wins over it key by key, and --options over both")
     g.add_argument("--brand", help="ffmpeg-skill brand.json: its colours, caption colour, font and font file set "
                                    "the look (an --options file still wins key by key)")
     g.add_argument("--gl", choices=GL_BACKENDS,
@@ -687,16 +696,21 @@ def brand_look(path: str) -> Tuple[Dict[str, Any], Optional[str], List[str]]:
 
 
 def load_look(a: argparse.Namespace) -> Dict[str, Any]:
-    """Options for render.py / still.py: the brand file's look, then --options over it."""
+    """Options for render.py / still.py: the --style preset, the brand file's look over it, then --options over
+    both, key by key."""
     options = load_options(a.options)
+    style: Dict[str, Any] = {}
+    if getattr(a, "style", None):
+        from _looks import STYLES
+        style = dict(STYLES[a.style])
     if not getattr(a, "brand", None):
-        return options
+        return {**style, **options}
     b, font_file, notes = brand_look(a.brand)
     for n in notes:
         info(n)
     if font_file and not a.font_file:
         a.font_file = font_file
-    return {**b, **options}
+    return {**style, **b, **options}
 
 
 def load_options(path: Optional[str]) -> Dict[str, Any]:
@@ -727,7 +741,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
     "kineticStyle": str, "kineticReveal": str, "kineticStagger": (int, float), "kineticSize": (int, float),
     "visualizer": str, "visualizerBars": int, "loopBars": (int, type(None)), "beatsPerBar": int,
-    "seed": int, "threeParticles": int,
+    "seed": int, "threeParticles": int, "captionBox": (str, type(None)),
 }
 
 

@@ -93,6 +93,7 @@ Every key is optional.
 | `beatsPerBar` | `4` | Visualizer: measured beats per bar for `loopBars`, 1–16 |
 | `seed` | `1` | ThreeScene: places the particles; same seed, same scene (0–4294967295) |
 | `threeParticles` | `300` | ThreeScene: number of particles, 1–5000 |
+| `captionBox` | `null` | Captioned / Karaoke / Emphasis: the caption box colour (any CSS colour); `null` = their dark box |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.
@@ -128,3 +129,29 @@ Example:
 2. Register it in `src/Root.tsx` with a `calculateMetadata` that derives length from the timeline.
 3. `render.py --comp YourId ...` — the output is still probed and contact-sheeted; the frame
    count check is replaced by an INFO row because the skill cannot know your length rule.
+
+## Style presets (`--style`)
+
+`render.py`, `still.py` and `pipeline.py --style NAME` start from a bundle of the options above (`scripts/_looks.py`). A `--brand` file wins over it key by key, and an `--options` file wins over both.
+
+| Style | Look |
+|---|---|
+| `swiss` | red accent, near-black text on off-white, a grotesk, light caption box; kinetic `wipe` per unit; bars |
+| `minimal` | white on near-black, small captions, a gentle pulse, no progress bar; kinetic `rise` per unit; waveform |
+| `neon` | pink accent, cyan text on a deep blue radial gradient, a strong pulse; kinetic `pop`; radial |
+| `glitch` | acid green accent on black, monospaced, a harder punch-in; kinetic `tracking`, fast stagger; spectrum |
+| `wafu` | vermilion accent, ink text on washi, a mincho face, light caption box; kinetic `rise` per character (Japanese look; opt-in) |
+| `corporate` | blue accent, white on navy, a plain sans, a calm pulse; kinetic `rise` per unit; bars |
+
+## Layers (`render.py --layers`, schema `remotion-ffmpeg-skill/layers@1`)
+
+Besides the composite, each graphic group is drawn alone on a transparent, full frame. Each group goes to its own ProRes 4444 file (`<output>.layers/NN_<group>.mov`). The groups are Captioned and Karaoke `captions`; Titled `sceneTitles`, `chapters`, `lowerThirds`; Emphasis `captions`, `bubbles`, `comments`; KineticType `text`. A manifest `<output>.layers.json` sits beside the composite:
+
+| Key | Meaning |
+|---|---|
+| `composition`, `composite`, `fps`, `width`, `height`, `frames`, `duration` | the composite the layers belong to |
+| `base` | what the layers go over: `source` (the video, or null), `background` (a blank's or audio-only source's background colour), `fit` |
+| `layers[]` | bottom first: `group`, `order`, `file` (null when nothing of the group shows; then `skipped` says so), `position` (`{x, y, width, height}`: full frame at 0,0), `times` (`[{start, end, from_frame, end_frame}]`, where the group draws), `codec`, `pix_fmt`, `frames` |
+
+Every layer is checked against the composite (ffmpeg-skill probe: frame count, size, a pixel format with alpha). Stacked over the base in order, the layers give back the composite. The fixture measures at least 45 dB PSNR on every frame (`test_integration.StylesAndLayers`).
+
