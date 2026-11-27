@@ -520,6 +520,14 @@ class Blank(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
+    def test_music_is_never_overwritten(self):
+        code, res = script("analyze", "--blank", "2", "--music", self.music, "-o", self.music, "--overwrite")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+        self.assertIn("never overwritten", res["error"])
+        code, res = script("pipeline", self.music, "--music", self.music, "--project", self.tmp, "--comp", "Captioned")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+        self.assertIn("needs --blank", res["error"])
+
     def test_blank_without_music(self):
         tl = self.tmp / "silent.timeline.json"
         code, res = script("analyze", "--blank", "4", "--size", "640x360", "--fps", "25", "-o", tl)

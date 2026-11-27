@@ -89,10 +89,14 @@ def main() -> None:
         die("give an input file, or --blank SECONDS for a run with no footage", "input")
     if a.blank is not None and inputs:
         die("--blank makes a run with no footage: give no input file (the music goes in --music)", "input")
+    if a.blank is None:
+        given = [f for f, v in (("--size", a.size), ("--fps", a.fps), ("--music", a.music)) if v is not None]
+        if given:
+            die(f"{', '.join(given)} {'needs' if len(given) == 1 else 'need'} --blank SECONDS", "input")
     blank_args: List[str] = []
     if a.blank is not None:
         music = Path(a.music).expanduser() if a.music else None
-        blank_args = ["--blank", f"{a.blank:g}"] + [x for flag, v in (("--size", a.size), ("--fps", a.fps),
+        blank_args = ["--blank", repr(a.blank)] + [x for flag, v in (("--size", a.size), ("--fps", a.fps),
                                                                        ("--music", a.music)) if v for x in (flag, v)]
         out_dir = Path(a.out_dir).expanduser() if a.out_dir else (music.parent if music else Path.cwd())
         stem = f"{music.stem}_blank" if music else "blank"

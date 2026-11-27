@@ -25,6 +25,7 @@ Examples:
 """
 import argparse
 import hashlib
+import os
 import shutil
 import sys
 import tempfile
@@ -326,8 +327,8 @@ def blank_flags_check(a: argparse.Namespace) -> None:
         return
     if a.input:
         die("--blank makes a timeline with no footage: give no input file (the music goes in --music)", "input")
-    if not (0 < a.blank <= BLANK_MAX_SECONDS):
-        die(f"--blank must be more than 0 and at most {BLANK_MAX_SECONDS:g} seconds, got {a.blank:g}", "input")
+    if not (0.001 <= a.blank <= BLANK_MAX_SECONDS):
+        die(f"--blank must be at least 0.001 and at most {BLANK_MAX_SECONDS:g} seconds, got {a.blank:g}", "input")
     bad = [flag for dest, flag in BLANK_REFUSES if getattr(a, dest, None) not in (None, False)]
     if a.chapters == "source":
         bad.append("--chapters source")
@@ -347,6 +348,8 @@ def blank_main(a: argparse.Namespace) -> None:
         out = Path(a.output).expanduser()
     else:
         out = default_output(music, "_blank.timeline", ".json") if music else Path("blank.timeline.json")
+    if music is not None and (out.resolve() == music.resolve() or (out.exists() and os.path.samefile(out, music))):
+        die(f"-o {out} is the --music file itself: the original is never overwritten", "input")
     refuse_existing(out)
     skill = require_ffmpeg_skill()
     captions, words, transcript, emphasis, emphasis_warnings = read_text_inputs(a)
