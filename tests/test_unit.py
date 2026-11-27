@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import _captions  # noqa: E402
+import _kinetic  # noqa: E402
 import _common  # noqa: E402
 import _sparse  # noqa: E402
 import analyze  # noqa: E402
@@ -75,6 +76,51 @@ class BlankArgs(unittest.TestCase):
                              "height": 1920, "has_video": False, "has_audio": False, "blank": True})
         self.assertEqual(_common.validate_timeline(t), [])
         self.assertEqual(_common.expected_frames("PeakPulse", t), 450)
+
+
+class Kinetic(unittest.TestCase):
+    """The KineticType schedule: every unit starts at a measured time (a word's or a beat's), never a made-up one."""
+    BEATS = {"times": [i * 0.5 for i in range(20)], "tempo_bpm": 120.0, "confidence": 0.9, "usable": True}
+
+    def test_split_units_keeps_the_text(self):
+        self.assertEqual(_kinetic.split_units("Neon  lights\nover"), [("Neon", False), ("lights", True), ("over", True)])
+        self.assertEqual(_kinetic.split_units("今日もいい天気、行こう"),
+                         [("今", False), ("日", False), ("も", False), ("い", False), ("い", False), ("天", False),
+                          ("気、", False), ("行", False), ("こ", False), ("う", False)])
+        self.assertEqual(_kinetic.split_units("ラーメン OK!"), [("ラー", False), ("メ", False), ("ン", False), ("OK!", True)])
+
+    def test_every_unit_is_on_a_beat(self):
+        caps = [{"start": 0.4, "end": 3.0, "text": "one two three"}, {"start": 3.1, "end": 6.0, "text": "four five"}]
+        k = _kinetic.schedule(caps, [], self.BEATS, "beats", 1, 10.0)
+        starts = [u["start"] for ln in k["lines"] for u in ln["units"]]
+        self.assertEqual(starts, [0.5, 1.0, 1.5, 3.5, 4.0])
+        self.assertEqual(k["by"], "beats")
+        k2 = _kinetic.schedule(caps, [], self.BEATS, "beats", 2, 10.0)
+        self.assertEqual([u["start"] for u in k2["lines"][0]["units"]], [0.5, 1.5, 2.5])
+        self.assertEqual(_kinetic.validate(k, 2), [])
+
+    def test_words_mode_uses_the_engine_times(self):
+        caps = [{"start": 0.3, "end": 2.0, "text": "Hello there"}]
+        words = [{"start": 0.31, "end": 0.8, "text": "Hello"}, {"start": 0.9, "end": 1.6, "text": " there"}]
+        k = _kinetic.schedule(caps, words, None, "auto")
+        self.assertEqual(k["by"], "words")
+        self.assertEqual(k["lines"][0]["units"], [{"text": "Hello", "gap": False, "start": 0.31},
+                                                  {"text": "there", "gap": True, "start": 0.9}])
+
+    def test_no_measurement_no_schedule(self):
+        caps = [{"start": 0.0, "end": 2.0, "text": "a b"}]
+        for beats, timing in ((None, "beats"), ({**self.BEATS, "usable": False}, "auto"), (self.BEATS, "words")):
+            with self.subTest(timing=timing):
+                with self.assertRaises(_kinetic.KineticError):
+                    _kinetic.schedule(caps, [], beats, timing)
+        with self.assertRaises(_kinetic.KineticError):
+            _kinetic.schedule([], [], self.BEATS, "beats")
+
+    def test_lines_never_overlap(self):
+        caps = [{"start": 0.0, "end": 1.0, "text": "a b c d e"}, {"start": 1.0, "end": 4.0, "text": "f"}]
+        k = _kinetic.schedule(caps, [], self.BEATS, "beats")
+        self.assertLessEqual(k["lines"][0]["end"], k["lines"][1]["start"])
+        self.assertTrue(any("past its end" in w for w in k["warnings"]))
 
 
 class Captions(unittest.TestCase):

@@ -27,6 +27,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from _kinetic import validate as validate_kinetic
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SKILL_ID = "remotion-ffmpeg-skill"
@@ -257,6 +259,7 @@ def validate_timeline(t: Any) -> List[str]:
             p.append(f"emphasis[{i}] needs start < end, text, its caption cue, the span of the text in that cue, "
                      "its word range and a style (pop, color, box or null) -- analyze.py --emphasis writes it")
             break
+    p += validate_kinetic(t.get("kinetic"), len(caps))
     for i, r in enumerate(t.get("speech", []) or []):
         if not (isinstance(r, list) and len(r) == 2 and r[1] > r[0]):
             p.append(f"speech[{i}] must be [start, end] with start < end")
@@ -334,7 +337,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis"):
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis", "KineticType"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -349,7 +352,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 # ---------------------------------------------------------------- Remotion project
 
 BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip",
-                        "Emphasis")
+                        "Emphasis", "KineticType")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -675,6 +678,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
     "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
     "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
+    "kineticStyle": str, "kineticReveal": str, "kineticStagger": (int, float), "kineticSize": (int, float),
 }
 
 
@@ -707,6 +711,16 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if isinstance(o.get("pipSize"), (int, float)) and not isinstance(o["pipSize"], bool) \
             and not 0.05 <= o["pipSize"] <= 0.6:
         p.append("pipSize must be between 0.05 and 0.6 (a fraction of the frame width)")
+    if "kineticStyle" in o and o["kineticStyle"] not in ("pop", "wipe", "tracking", "rise"):
+        p.append("kineticStyle must be pop, wipe, tracking or rise")
+    if "kineticReveal" in o and o["kineticReveal"] not in ("unit", "char"):
+        p.append("kineticReveal must be unit or char")
+    if isinstance(o.get("kineticStagger"), (int, float)) and not isinstance(o["kineticStagger"], bool) \
+            and not 0 <= o["kineticStagger"] <= 1:
+        p.append("kineticStagger must be between 0 and 1 second")
+    if isinstance(o.get("kineticSize"), (int, float)) and not isinstance(o["kineticSize"], bool) \
+            and not 0.01 <= o["kineticSize"] <= 0.5:
+        p.append("kineticSize must be between 0.01 and 0.5 (a fraction of the frame's short side)")
     if "emphasisStyle" in o and o["emphasisStyle"] not in ("pop", "color", "box"):
         p.append("emphasisStyle must be pop, color or box")
     for key, extra in (("bubbles", "side"), ("comments", "author")):

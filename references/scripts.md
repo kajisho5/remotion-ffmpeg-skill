@@ -40,6 +40,8 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--fps` | string |  | with --blank: the frame rate, e.g. 30, 25, 30000/1001 (default 30) |
 | `--music` | string |  | with --blank: the music (any file with an audio stream) that plays under the blank timeline from 0 s; measured with ffmpeg-skill (scenes.py peaks and --beats, silence.py). Cut at the blank's end when longer, silence after it when shorter |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
+| `--kinetic` | string: auto / words / beats |  | schedule the caption cues' words for the KineticType composition: `words` (each word at the time --words measured), `beats` (each word, or CJK character, on the next measured beat; needs --beats) or `auto` (words when given, else beats). Never from unmeasured times |
+| `--kinetic-step` | integer | `1` | with --kinetic beats: measured beats per word (default 1) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
 | `--no-scenes` | boolean |  | skip scene-cut detection |
@@ -87,7 +89,7 @@ Render single frames as PNG to check the look before a full render.
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, or yours) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options |
 | `--at` | number, repeatable |  | time in seconds (repeatable) |
@@ -118,7 +120,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, or one you added) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, or one you added) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options (see references/timeline.md) |
 | `--output` | string |  | output file (default: <source>_<comp>.mp4, .mov for prores) |
@@ -183,7 +185,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 |---|---|---|---|
 | `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first (with --blank: none, or `-`) |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
 | `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |

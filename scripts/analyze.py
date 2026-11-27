@@ -22,6 +22,7 @@ Examples:
   python3 analyze.py talk.mp4 --words talk.transcript.json --emphasis words.json   # Emphasis composition
   python3 analyze.py phone_hdr.mov --conform                  # VFR / HDR: measure and draw on a CFR SDR copy
   python3 analyze.py --blank 15 --size 1080x1920 --music bgm.wav --beats   # no footage: a 15 s blank timeline
+  python3 analyze.py --blank 15 --music song.wav --beats --captions lyrics.srt --kinetic beats   # KineticType
 """
 import argparse
 import hashlib
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
                      exact_rate, require_ffmpeg_skill, shell_join, stream_rate, version, parse_with_blank)
+from _kinetic import KINETIC_TIMINGS, KineticError, schedule as kinetic_schedule
 from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_emphasis,
                        read_word_timings, resolve_emphasis, youtube_chapter_warnings)
 
@@ -107,6 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "from 0 s; measured with ffmpeg-skill (scenes.py peaks and --beats, silence.py). Cut at the "
                         "blank's end when longer, silence after it when shorter")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
+    p.add_argument("--kinetic", choices=KINETIC_TIMINGS, metavar="TIMING",
+                   help="schedule the caption cues' words for the KineticType composition: `words` (each word at "
+                        "the time --words measured), `beats` (each word, or CJK character, on the next measured "
+                        "beat; needs --beats) or `auto` (words when given, else beats). Never from unmeasured times")
+    p.add_argument("--kinetic-step", type=int, default=1, metavar="N",
+                   help="with --kinetic beats: measured beats per word (default 1)")
     p.add_argument("--highlights", type=int, metavar="N",
                    help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
     p.add_argument("--target", type=float, metavar="SECONDS", help="with --highlights: total length the picks add up to")
@@ -285,6 +293,20 @@ def conform_source(label: str, src: Path, probe: Dict[str, Any], out: Path, fps:
     return out, after, record
 
 
+def kinetic_for(a: argparse.Namespace, captions: List[Dict[str, Any]], words: List[Dict[str, Any]], beats: Any,
+                duration: float) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """The KineticType schedule (scripts/_kinetic.py) when --kinetic was given, and its warnings."""
+    if a.kinetic is None:
+        if a.kinetic_step != 1:
+            die("--kinetic-step needs --kinetic", "input")
+        return None, []
+    try:
+        k = kinetic_schedule(captions, words, beats, a.kinetic, a.kinetic_step, duration)
+    except KineticError as e:
+        die(str(e), "input")
+    return {key: k[key] for key in ("by", "step", "lines")}, k["warnings"]
+
+
 # ---------------------------------------------------------------- source-less runs (--blank)
 
 BLANK_MAX_SECONDS = 24 * 3600.0
@@ -433,6 +455,8 @@ def blank_main(a: argparse.Namespace) -> None:
         except CaptionError as e:
             die(f"{chpath}: {e}", "input")
 
+    kinetic, kinetic_warnings = kinetic_for(a, captions, words, beats, duration)
+    warnings += kinetic_warnings
     timeline: Dict[str, Any] = {
         "schema": TIMELINE_SCHEMA,
         "generator": {"name": SKILL_ID, "version": version(), "ffmpeg_skill": ffmpeg_skill_version(skill)},
@@ -445,7 +469,7 @@ def blank_main(a: argparse.Namespace) -> None:
         "scenes": [{"start": 0.0, "end": duration}],
         "silences": silences, "speech": speech, "peaks": peaks, "beats": beats, "highlights": [], "clips": [],
         "captions": captions, "words": words, "emphasis": emphasis, "chapters": chapters, "pip": None,
-        "conform": None,
+        "kinetic": kinetic, "conform": None,
         "warnings": warnings + (youtube_chapter_warnings(chapters) if chapters else []) + emphasis_warnings,
     }
     for w in timeline["warnings"]:
@@ -459,7 +483,8 @@ def blank_main(a: argparse.Namespace) -> None:
                       "peaks": len(peaks), "captions": len(captions), "chapters": len(chapters), "pip_offset": None,
                       "beats": bool(beats and beats.get("usable")), "tempo_bpm": (beats or {}).get("tempo_bpm"),
                       "highlights": 0, "clips": 1, "words": len(words), "emphasis": len(emphasis), "conformed": [],
-                      "blank": True, "music": music.name if music else None},
+                      "blank": True, "music": music.name if music else None,
+                      "kinetic": sum(len(ln["units"]) for ln in kinetic["lines"]) if kinetic else 0},
           "warnings": timeline["warnings"]},
          f"wrote {out}: blank {duration:g} s, {width}x{height} at {fps:g} fps, "
          + (f"music {music.name} ({len(peaks)} peaks" + (f", {len((beats or {}).get('times') or [])} beats" if beats else "")
@@ -710,6 +735,7 @@ def main() -> None:
         if pip["offset"] >= duration or pip["offset"] + pip["duration"] <= 0:
             die(f"--pip: with an offset of {pip['offset']:g} s the camera never overlaps the source", "input")
 
+    kinetic, kinetic_warnings = kinetic_for(a, captions, words, beats, duration)
     v = video or {}
     timeline: Dict[str, Any] = {
         "schema": TIMELINE_SCHEMA,
@@ -737,10 +763,12 @@ def main() -> None:
         "emphasis": emphasis,
         "chapters": chapters,
         "pip": pip,
+        # The KineticType schedule (--kinetic): when each word or CJK character starts, from words or beats.
+        "kinetic": kinetic,
         # Provenance of a conformed source (--conform): the original, each ffmpeg-skill step, the measured copy.
         "conform": conform,
         "warnings": warnings_for(probe) + (youtube_chapter_warnings(chapters) if chapters else []) + transcript_warnings
-        + emphasis_warnings,
+        + emphasis_warnings + kinetic_warnings,
     }
     if pip and pip["measured"] and (pip["confidence"] or 0) < 0.3:
         timeline["warnings"].append(f"pip: the measured offset ({pip['offset']:g} s) has low confidence "
@@ -767,7 +795,8 @@ def main() -> None:
                       "pip_offset": pip["offset"] if pip else None, "beats": bool(beats and beats.get("usable")),
                       "tempo_bpm": (beats or {}).get("tempo_bpm"), "highlights": len(highlights),
                       "clips": len(clips) or 1, "words": len(words), "emphasis": len(emphasis),
-                      "conformed": (conform or {}).get("reasons", [])},
+                      "conformed": (conform or {}).get("reasons", []),
+                      "kinetic": sum(len(ln["units"]) for ln in kinetic["lines"]) if kinetic else 0},
           "warnings": timeline["warnings"]},
          f"wrote {out}: {timeline['source']['duration']}s, {len(scenes)} scenes, {len(silences)} silences "
          f"(speech {speech_total:.2f}s), {len(peaks)} peaks, {len(captions)} captions"

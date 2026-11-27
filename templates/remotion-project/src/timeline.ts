@@ -77,6 +77,12 @@ export type Highlight = { start: number; end: number };
 /** A lower third: text from the user (options), timing in source seconds. */
 export type LowerThird = { text: string; sub?: string; start: number; end: number };
 export type Peak = { time: number; rms: number };
+/** The KineticType schedule (analyze.py --kinetic): one line per caption cue, each unit (a word, or one CJK
+ * character) starting at a measured time -- its word's (by "words") or a beat's (by "beats"). gap: a space before
+ * the unit. The line shows from its first unit's start until `end`. */
+export type KineticUnit = { text: string; gap: boolean; start: number };
+export type KineticLine = { cue: number; start: number; end: number; units: KineticUnit[] };
+export type Kinetic = { by: "words" | "beats"; step: number | null; lines: KineticLine[] };
 export type Scene = { start: number; end: number };
 
 export type Timeline = {
@@ -98,6 +104,8 @@ export type Timeline = {
   /** Emphasised caption words (analyze.py --emphasis); drawn by the Emphasis composition. */
   emphasis?: Emphasis[];
   pip?: Pip | null;
+  /** The KineticType schedule (analyze.py --kinetic); absent or null otherwise. */
+  kinetic?: Kinetic | null;
   /** Set by analyze.py --blank (a timeline with no footage); absent or null otherwise. */
   blank?: Blank | null;
   /** Set when analyze.py --conform measured a conformed copy instead of the original (null otherwise). */
@@ -148,6 +156,14 @@ export type Options = {
   comments: CommentCard[];
   /** The picture of a source-less run (analyze.py --blank): a CSS colour or gradient. */
   background: string;
+  /** KineticType: how a unit enters -- scale pop, a mask wipe, tracking (letter-spacing closing in) or a rise. */
+  kineticStyle: "pop" | "wipe" | "tracking" | "rise";
+  /** KineticType: the whole unit enters at its start, or its characters one after another from that start. */
+  kineticReveal: "unit" | "char";
+  /** KineticType: seconds between characters with kineticReveal "char" (the first is at the unit's start). */
+  kineticStagger: number;
+  /** KineticType: text size as a fraction of the frame's short side. */
+  kineticSize: number;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -173,6 +189,10 @@ export const DEFAULT_OPTIONS: Options = {
   bubbles: [],
   comments: [],
   background: "#000000",
+  kineticStyle: "pop",
+  kineticReveal: "char",
+  kineticStagger: 0.04,
+  kineticSize: 0.09,
 };
 
 /** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */
