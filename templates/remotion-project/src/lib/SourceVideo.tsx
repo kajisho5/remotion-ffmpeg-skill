@@ -11,15 +11,27 @@ type Props = {
   /** Source frame to stop at. */
   trimAfter?: number;
   style?: React.CSSProperties;
+  /** The picture of a blank source (analyze.py --blank): options.background. */
+  background?: string;
 };
 
 /**
  * The measured source as the bottom layer.
  * - video: OffthreadVideo, placed by `fit` (contain / cover / blur)
  * - audio only: a neutral placeholder picture with the audio playing under it
+ * - blank (analyze.py --blank): the background, with the music (if any) playing under it
  * - nothing staged: the placeholder alone (Studio previews)
  */
-export const SourceVideo: React.FC<Props> = ({ source, fit = "contain", trimBefore, trimAfter, style }) => {
+export const SourceVideo: React.FC<Props> = ({ source, fit = "contain", trimBefore, trimAfter, style, background }) => {
+  if (source.blank) {
+    return (
+      <AbsoluteFill style={{ ...style, background: background ?? "#000000" }}>
+        {source.src && source.has_audio ? (
+          <Audio src={staticFile(source.src)} trimBefore={trimBefore} trimAfter={trimAfter} />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
   if (!source.src) {
     return <Placeholder label={source.name} />;
   }

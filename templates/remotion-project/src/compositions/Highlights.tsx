@@ -25,7 +25,7 @@ export const Highlights: React.FC<Props> = (props) => {
           const len = Math.max(1, secToFrames(e, fps) - a);
           return (
             <Series.Sequence key={i} durationInFrames={len} name={`highlight ${i + 1}`}>
-              <SourceVideo source={timeline.source} fit={fit} trimBefore={a} trimAfter={a + len} />
+              <SourceVideo background={o.background} source={timeline.source} fit={fit} trimBefore={a} trimAfter={a + len} />
               {i > 0 ? <CutFlash /> : null}
               <Counter index={i} total={ranges.length} o={o} fontFamily={family} />
               {i === 0 && o.title ? <Title text={o.title} len={len} o={o} fontFamily={family} /> : null}

@@ -674,7 +674,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
     "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
     "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
-    "emphasisStyle": str, "bubbles": list, "comments": list,
+    "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
 }
 
 
@@ -725,6 +725,24 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if any(not isinstance(s, str) for s in (o.get("sceneTitles") or [])):
         p.append("sceneTitles must be a list of strings")
     return p
+
+
+NO_INPUT = "-"
+
+
+def parse_with_blank(parser: argparse.ArgumentParser, argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse argv for analyze.py / pipeline.py. Their `input` takes one or more files (the contract's minItems 1);
+    a source-less run (--blank) has none: on the command line it may simply be left out, and `-` (NO_INPUT) is the
+    placeholder a caller that must send at least one item (an MCP client) gives instead. Either way the
+    namespace's `input` is then the real files only."""
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if any(x == "--blank" or x.startswith("--blank=") for x in argv):
+        for act in parser._actions:
+            if act.dest == "input":
+                act.nargs = "*"
+    a = parser.parse_args(argv)
+    a.input = [i for i in (a.input or []) if i != NO_INPUT]
+    return a
 
 
 def now() -> float:

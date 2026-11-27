@@ -67,6 +67,7 @@ Moving text has three owners: word-timed caption effects are this skill's, anima
 | "use our brand" / a `brand.json` (ffmpeg-skill's format) | `--brand brand.json` on render / still / pipeline: its colours, caption colour, font and font file set the look (an `--options` file wins key by key); `deliver.py` / `pipeline.py --brand` places its logo with the template |
 | a phone clip (VFR) or HDR / iPhone HDR / HLG footage | `analyze.py --conform` (or `pipeline.py --conform`): drawn on a CFR SDR BT.709 copy ffmpeg-skill made; without the flag it is refused |
 | several clips ("intro + talk + outro") | `analyze.py A.mp4 B.mov C.mp4` (or `pipeline.py` with several inputs): ffmpeg-skill join.py normalises and joins them, then everything is measured on the joined file |
+| "a video from just this music" / text or a visualizer with no footage | `analyze.py --blank SECONDS --size WxH [--fps N] [--music bgm.wav] [--beats]` (or `pipeline.py --blank ...`; through MCP, `input` is `["-"]`): a timeline with no footage, the music measured for peaks and beats as a source's audio is; any composition draws on the `background` option (default black). Length, size and rate are the caller's, so ask for them |
 | "preview" / "show me a frame" | `still.py` |
 | a new kind of graphic | add a composition to `src/` of the project that reads `Props` from `src/timeline.ts`; render with `--comp YourId` (render.py then reports measured numbers without a built-in expectation) |
 | plain cut / trim / resize / loudness with no graphics | not this skill: use ffmpeg-skill directly |

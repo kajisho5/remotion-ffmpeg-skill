@@ -19,7 +19,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `input` | string, repeatable |  | source video (or audio) file; several are joined in order first |
+| `input` | string, repeatable |  | source video (or audio) file; several are joined in order first (with --blank: none, or `-`) |
 | `--joined` | string |  | with several inputs: where the joined source goes (default: <first>_joined.mp4) |
 | `--join-transition` | string | `none` | with several inputs: ffmpeg-skill join.py --transition (default none = straight cuts) |
 | `--join-duration` | number | `0.5` | transition length in seconds (default 0.5) |
@@ -35,6 +35,10 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 | `--conform` | boolean |  | a variable-frame-rate or HDR / BT.2020 source (or --pip camera) is first made into a constant-frame-rate, SDR BT.709 copy with ffmpeg-skill (fit.py --fps, color.py --to-sdr: tone-mapped, so the look changes) and everything is measured and drawn on that copy; the original is never modified. Without it such a source is refused |
 | `--conformed` | string |  | with --conform: where the conformed copy of the source goes (default: <name>_conformed.mp4) |
 | `--conform-fps` | number |  | with --conform: the constant frame rate for a VFR source (default: the stream's base rate, r_frame_rate, so no frame is dropped) |
+| `--blank` | number |  | a source-less run: a timeline of this many seconds with no footage (a plain background), so a composition draws from nothing. With --music the music plays under it and is measured for peaks (and --beats) as a source's audio is; no input file is given |
+| `--size` | string |  | with --blank: the frame size in px, even numbers (default 1920x1080) |
+| `--fps` | string |  | with --blank: the frame rate, e.g. 30, 25, 30000/1001 (default 30) |
+| `--music` | string |  | with --blank: the music (any file with an audio stream) that plays under the blank timeline from 0 s; measured with ffmpeg-skill (scenes.py peaks and --beats, silence.py). Cut at the blank's end when longer, silence after it when shorter |
 | `--beats` | boolean |  | also measure the beat grid (scenes.py --beats) |
 | `--highlights` | integer |  | also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition |
 | `--target` | number |  | with --highlights: total length the picks add up to |
@@ -177,7 +181,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first |
+| `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first (with --blank: none, or `-`) |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
 | `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
@@ -187,6 +191,10 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 | `--platform` | string: youtube / youtube-shorts / shorts / reels / tiktok / x / facebook / linkedin / podcast / audiogram |  | deliver with this ffmpeg-skill template and check it |
 | `--out-dir` | string |  | where the timeline, render and deliverable go (default: next to the input) |
 | `--beats` | boolean |  | measure the beat grid too |
+| `--blank` | number |  | no footage: draw the composition on a plain background this many seconds long (analyze.py --blank); give no input file |
+| `--size` | string |  | with --blank: frame size (default 1920x1080) |
+| `--fps` | string |  | with --blank: frame rate (default 30) |
+| `--music` | string |  | with --blank: music under it, measured for peaks and --beats |
 | `--conform` | boolean |  | a variable-frame-rate or HDR source is made into a constant-frame-rate, SDR BT.709 copy with ffmpeg-skill first (analyze.py --conform; the copy goes in --out-dir) and drawn on; without it such a source is refused |
 | `--fast` | boolean |  | preview-quality render |
 | `--aspect` | string: source / 16:9 / 9:16 / 1:1 / 4:5 / 4:3 |  | output shape (default: the shape the --platform template delivers, else the source's) |

@@ -29,7 +29,7 @@ export const Jumpcut: React.FC<Props> = (props) => {
           return (
             <Series.Sequence key={i} durationInFrames={len} name={`cut ${i + 1}`}>
               <Punch zoom={zoom} len={len}>
-                <SourceVideo source={timeline.source} fit={fit} trimBefore={a} trimAfter={a + len} />
+                <SourceVideo background={o.background} source={timeline.source} fit={fit} trimBefore={a} trimAfter={a + len} />
               </Punch>
             </Series.Sequence>
           );

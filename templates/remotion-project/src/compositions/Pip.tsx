@@ -38,7 +38,7 @@ export const Pip: React.FC<Props> = (props) => {
   const [from, dur, trimBefore] = pip ? pipFrames(pip, fps, durationInFrames) : [0, 1, 0];
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <SourceVideo source={timeline.source} fit={outputFrame(props).fit} />
+      <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />
       {pip && pip.src ? (
         <Sequence from={from} durationInFrames={dur} name="camera" layout="none">
           <div style={box}>

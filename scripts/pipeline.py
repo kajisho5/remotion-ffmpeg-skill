@@ -7,6 +7,7 @@ Examples:
   python3 pipeline.py talk.mp4 --project ./motion --comp Jumpcut --captions talk.srt --platform youtube
   python3 pipeline.py clip.mp4 --project ./motion --comp PeakPulse --platform reels --out-dir out/
   python3 pipeline.py talk.mp4 --project ./motion --comp Captioned --captions talk.srt   # no delivery step
+  python3 pipeline.py --blank 15 --size 1080x1920 --music bgm.wav --project ./motion --comp PeakPulse   # no footage
 """
 import argparse
 import json
@@ -17,14 +18,15 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (ASPECTS, BUILTIN_COMPOSITIONS, FITS, HERE, STATE, add_common, apply_common, die, emit, info,
-                     platform_aspect, shell_join)
+                     platform_aspect, shell_join, parse_with_blank)
 from deliver import PLATFORMS
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", nargs="+", help="source video; several are joined in order (ffmpeg-skill join.py) first")
+    p.add_argument("input", nargs="+", help="source video; several are joined in order (ffmpeg-skill join.py) first "
+                                            "(with --blank: none, or `-`)")
     p.add_argument("--project", required=True, help="Remotion project folder made by init.py")
     p.add_argument("--comp", required=True, help=f"composition id ({', '.join(BUILTIN_COMPOSITIONS)}, or yours)")
     p.add_argument("--captions", help="SRT / WebVTT / JSON cues for the timeline")
@@ -36,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--platform", choices=PLATFORMS, help="deliver with this ffmpeg-skill template and check it")
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
+    p.add_argument("--blank", type=float, metavar="SECONDS",
+                   help="no footage: draw the composition on a plain background this many seconds long "
+                        "(analyze.py --blank); give no input file")
+    p.add_argument("--size", metavar="WxH", help="with --blank: frame size (default 1920x1080)")
+    p.add_argument("--fps", metavar="RATE", help="with --blank: frame rate (default 30)")
+    p.add_argument("--music", metavar="FILE", help="with --blank: music under it, measured for peaks and --beats")
     p.add_argument("--conform", action="store_true",
                    help="a variable-frame-rate or HDR source is made into a constant-frame-rate, SDR BT.709 copy "
                         "with ffmpeg-skill first (analyze.py --conform; the copy goes in --out-dir) and drawn on; "
@@ -71,22 +79,39 @@ def step(name: str, script: str, args: List[str], steps: List[Dict[str, Any]]) -
 
 
 def main() -> None:
-    a = build_parser().parse_args()
+    a = parse_with_blank(build_parser())
     apply_common(a)
     inputs = [Path(i).expanduser() for i in a.input]
     missing = [str(i) for i in inputs if not i.is_file()]
     if missing:
         die(f"input not found: {', '.join(missing)}", "input")
-    src = inputs[0]
-    out_dir = Path(a.out_dir).expanduser() if a.out_dir else src.parent
+    if a.blank is None and not inputs:
+        die("give an input file, or --blank SECONDS for a run with no footage", "input")
+    if a.blank is not None and inputs:
+        die("--blank makes a run with no footage: give no input file (the music goes in --music)", "input")
+    if a.blank is None:
+        given = [f for f, v in (("--size", a.size), ("--fps", a.fps), ("--music", a.music)) if v is not None]
+        if given:
+            die(f"{', '.join(given)} {'needs' if len(given) == 1 else 'need'} --blank SECONDS", "input")
+    blank_args: List[str] = []
+    if a.blank is not None:
+        music = Path(a.music).expanduser() if a.music else None
+        blank_args = ["--blank", repr(a.blank)] + [x for flag, v in (("--size", a.size), ("--fps", a.fps),
+                                                                       ("--music", a.music)) if v for x in (flag, v)]
+        out_dir = Path(a.out_dir).expanduser() if a.out_dir else (music.parent if music else Path.cwd())
+        stem = f"{music.stem}_blank" if music else "blank"
+    else:
+        src = inputs[0]
+        out_dir = Path(a.out_dir).expanduser() if a.out_dir else src.parent
+        stem = src.stem + ("_joined" if len(inputs) > 1 else "")
     if not STATE.dry_run:
         out_dir.mkdir(parents=True, exist_ok=True)
-    stem = src.stem + ("_joined" if len(inputs) > 1 else "")
     tl = out_dir / f"{stem}.timeline.json"
     render_out = out_dir / f"{stem}_{a.comp}.mp4"
     steps: List[Dict[str, Any]] = []
 
-    an_args = [*map(str, inputs), "-o", str(tl)] + (["--joined", str(out_dir / f"{stem}.mp4")] if len(inputs) > 1 else [])
+    an_args = [*map(str, inputs), *blank_args, "-o", str(tl)]
+    an_args += ["--joined", str(out_dir / f"{stem}.mp4")] if len(inputs) > 1 else []
     an_args += (["--captions", a.captions] if a.captions else []) + (["--beats"] if a.beats else [])
     an_args += ["--chapters", a.chapters] if a.chapters else []
     an_args += ["--conform", "--conformed", str(out_dir / f"{stem}_conformed.mp4")] if a.conform else []
