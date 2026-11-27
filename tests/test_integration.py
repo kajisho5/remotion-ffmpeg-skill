@@ -20,7 +20,8 @@ from tmp_dirs import tmp_dir  # noqa: E402
 
 HAVE = shutil.which("ffmpeg") and _common.find_ffmpeg_skill() is not None
 PROJECT = os.environ.get("RFS_PROJECT")
-TRANSCRIPT = ROOT / "tests" / "fixtures" / "transcript.json"   # transcription-skill/transcript/0.1, fictional
+TRANSCRIPT = ROOT / "tests" / "fixtures" / "transcript.json"
+NEEDS_KINETIC = {"KineticType"}   # draws only a schedule analyze.py --kinetic wrote from words or measured beats   # transcription-skill/transcript/0.1, fictional
 
 # The caption timeline TRANSCRIPT must produce on the 8 s fixture: every time is the transcript's own.
 # seg_0001 (Japanese, no spaces) is one cue from its words; seg_0002 has no word timings, so it is one
@@ -491,6 +492,9 @@ class Analyze(unittest.TestCase):
             with self.subTest(comp=comp):
                 code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", self.tl,
                                    "-o", self.tmp / f"{comp}.mp4", "--fast")
+                if comp in NEEDS_KINETIC:   # no --kinetic schedule in this timeline: refused (class KineticType renders it)
+                    self.assertEqual((code, res.get("kind")), (2, "input"), res)
+                    continue
                 self.assertEqual(code, 0, res)
                 self.assertTrue(res["verified"])
                 self.assertEqual(_contract.missing_output_keys("render", res), [])
@@ -547,7 +551,7 @@ class Blank(unittest.TestCase):
         tl = self.tmp / "tiny.timeline.json"
         code, res = script("analyze", "--blank", "1", "--size", "320x180", "-o", tl)
         self.assertEqual(code, 0, res)
-        for comp in _common.BUILTIN_COMPOSITIONS:
+        for comp in (c for c in _common.BUILTIN_COMPOSITIONS if c not in NEEDS_KINETIC):
             with self.subTest(comp=comp):
                 code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", tl,
                                    "-o", self.tmp / f"tiny_{comp}.mp4", "--no-look")
@@ -581,6 +585,94 @@ class Blank(unittest.TestCase):
         self.assertEqual(probe["video"]["nb_frames"], 450)                   # 15.0 s at 30 fps
         self.assertEqual((probe["video"]["width"], probe["video"]["height"]), (1080, 1920))
         self.assertTrue(probe.get("audio"))
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class KineticType(unittest.TestCase):
+    """KineticType on a 120 BPM fixture: each word (or CJK character) starts on a measured beat, to the frame."""
+
+    LYRICS = ("1\n00:00:00,400 --> 00:00:02,600\nNeon lights over town\n\n"
+              "2\n00:00:03,000 --> 00:00:05,600\n今日もいい天気\n")     # fictional lyric lines
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-kin-")
+        cls.music = cls.tmp / "beat120.wav"   # a decaying 80 Hz hit every 0.5 s: 120 BPM, beats on 0.5 s multiples
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "aevalsrc='0.8*sin(2*PI*80*t)*exp(-mod(t\\,0.5)*12)':s=44100:d=8", str(cls.music)], check=True)
+        (cls.tmp / "lyrics.srt").write_text(cls.LYRICS, encoding="utf-8")
+        cls.tl = cls.tmp / "kin.timeline.json"
+        cls.code, cls.res = script("analyze", "--blank", "8", "--size", "640x360", "--music", cls.music, "--beats",
+                                   "--captions", cls.tmp / "lyrics.srt", "--kinetic", "beats", "-o", cls.tl)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def setUp(self):
+        if not ffmpeg_skill_at_least(3, 2, 0):
+            self.skipTest("ffmpeg-skill measures audio-only files from 3.2.0")
+        self.assertEqual(self.code, 0, self.res)
+        self.t = json.loads(self.tl.read_text(encoding="utf-8"))
+
+    def test_every_word_is_on_a_beat(self):
+        self.assertEqual(_common.validate_timeline(self.t), [])
+        self.assertEqual(self.res["summary"]["kinetic"], 11)
+        fps = self.t["source"]["fps"]
+        beats = self.t["beats"]["times"]
+        units = [u for ln in self.t["kinetic"]["lines"] for u in ln["units"]]
+        self.assertEqual([u["text"] for u in units], ["Neon", "lights", "over", "town", "今", "日", "も", "い", "い",
+                                                      "天", "気"])
+        for u in units:
+            nearest = min(beats, key=lambda b: abs(b - u["start"]))
+            self.assertLessEqual(abs(u["start"] - nearest) * fps, 1.0, u)          # on a measured beat
+            self.assertLessEqual(abs(u["start"] - round(u["start"] * 2) / 2) * fps, 1.0, u)   # the true 120 BPM grid
+        plain = self.tmp / "plain.timeline.json"
+        plain.write_text(json.dumps({**self.t, "kinetic": None}), encoding="utf-8")
+        proj = self.tmp / "proj"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--comp", "KineticType", "--timeline", plain, "--dry-run")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+        self.assertIn("--kinetic", res["error"])
+
+    def stills(self, timeline: Path, frames, name: str):
+        code, res = script("still", "--project", PROJECT, "--comp", "KineticType", "--timeline", timeline,
+                           *[x for f in frames for x in ("--frame", f)], "--out-dir", self.tmp / name)
+        self.assertEqual(code, 0, res)
+        return res, [sha256(Path(p)) for p in res["outputs"]]
+
+    def unit_starts_on_its_frame(self, li: int, ui: int):
+        """The render with unit (li, ui) never shown matches the real one on the frame before its start and
+        differs on its start frame: the unit enters exactly on round(start * fps)."""
+        fps = self.t["source"]["fps"]
+        start = _common.sec_to_frames(self.t["kinetic"]["lines"][li]["units"][ui]["start"], fps)
+        hidden = json.loads(json.dumps(self.t))
+        hidden["kinetic"]["lines"][li]["units"][ui]["start"] = 1000.0
+        alt = self.tmp / f"hide_{li}_{ui}.timeline.json"
+        alt.write_text(json.dumps(hidden, ensure_ascii=False), encoding="utf-8")
+        res, real = self.stills(self.tl, [start - 1, start], f"real_{li}_{ui}")
+        _, other = self.stills(alt, [start - 1, start], f"hide_{li}_{ui}")
+        self.assertEqual(real[0], other[0], f"unit {li}.{ui} shows before frame {start}")
+        self.assertNotEqual(real[1], other[1], f"unit {li}.{ui} does not show on frame {start}")
+        return res
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_each_word_enters_on_its_beat_frame(self):
+        for ui in range(4):
+            with self.subTest(word=ui):
+                self.unit_starts_on_its_frame(0, ui)
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_japanese_line_per_character_with_the_cjk_font(self):
+        res = self.unit_starts_on_its_frame(1, 2)
+        if not res.get("font"):
+            self.skipTest("no CJK font found on this machine")
+        self.assertIn("for ja captions", res["font"])
+        self.unit_starts_on_its_frame(1, 3)
+        code, res = script("render", "--project", PROJECT, "--comp", "KineticType", "--timeline", self.tl,
+                           "-o", self.tmp / "kin.mp4", "--fast")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
 
 
 @unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")

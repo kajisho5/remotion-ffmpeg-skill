@@ -202,6 +202,9 @@ def main() -> None:
     output = output.resolve()
     refuse_existing(output)
 
+    if a.comp == "KineticType" and not timeline.get("kinetic"):
+        die("KineticType draws the schedule analyze.py --kinetic writes (words or measured beats); this timeline "
+            "has none: re-run analyze.py with --kinetic", "input")
     if a.sparse:
         if a.comp not in _sparse.SPARSE_COMPOSITIONS:
             die(f"--sparse draws only the stretches where graphics show: {a.comp} is not one of "

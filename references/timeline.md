@@ -31,6 +31,7 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `pip` | `{path, name, duration, width, height, fps, offset, confidence, measured}` or null | `--pip CAMERA` (offset from ffmpeg-skill sync.py over both audio tracks) or `--pip-offset` | offset = seconds after the source's start at which the camera's first frame belongs (negative: the camera started first) |
 | `words` | `[{start, end, text}]` | `--words` (whisper JSON with word timestamps, `{"words": [...]}` or a list) | per-word timings with the engine's own spacing; Karaoke lights them up |
 | `emphasis` | `[{start, end, text, style, cue, span, words, by}]` | `--emphasis FILE` (the caller's words: a JSON list of words or `{text, at?, style?}`) and / or `--emphasis-auto numbers,names`; needs `--words` | each emphasised word as a slice of caption cue `cue`'s own timed words (`words` = [first, last] index into `words`): `start` / `end` are the engine's times of those words, `text` the caption's own spelling, `span` its [start, end) code-point offsets in the cue's text (the cue text is what is drawn; when `--captions` and `--words` disagree about a word, it is refused). `style` is `pop`, `color`, `box` or null (= the `emphasisStyle` option); `by` is `caller`, `numbers` or `names`. A caller's word that is not a whole, timed word of the cue (or of the cue showing at `at`) is refused (`kind: input`) |
+| `kinetic` | object \| null (optional) | analyze.py `--kinetic words\|beats\|auto` | the KineticType schedule: `{by, step, lines: [{cue, start, end, units: [{text, gap, start}]}]}`. One line per caption cue; a unit is a word (split at spaces) or, in text written without spaces (Japanese, Chinese), one character, punctuation staying with the one before. `start` is measured: the word's own time from `--words` (`by: words`), or the next measured beat from `--beats`, `step` beats apart (`by: beats`, `--kinetic-step`). `gap`: a space before the unit. A line shows from its first unit's start until `end` (its cue's end, later when the beats run past it, never into the next line). No measurement, no schedule: refused (`kind: input`) |
 | `conform` | object \| null | analyze.py `--conform` | provenance when the source was VFR or HDR: `reasons` (`vfr`, `hdr`), `original` (path, name, sha256 fingerprint, duration, frame rates, colour tags), `output` (= `source.path`), `steps` (`{reason, tool, args, command, notes}` per ffmpeg-skill call: `fit.py --fps`, then `color.py --to-sdr`), `measured` (ffmpeg-skill probe of the copy: CFR, BT.709). `pip.conform` is the same for a conformed camera. null = the source was drawn on as it is |
 | `warnings` | `[string]` | analyze.py | rotation, odd frame rate, chapters, transcript (VFR and HDR are never warnings: conformed or refused) |
 
@@ -50,6 +51,7 @@ composition exactly.
 | `Karaoke` | source duration | caption cues whose words light up at their measured times (current word accent + lift, spoken white, upcoming dimmed); cues without timed words show plain |
 | `Emphasis` | source duration | YouTube-style captions: each cue as written; its `emphasis` words pop, take the accent colour or get an accent box from the time they are spoken to the end of the cue; speech bubbles (`bubbles`) and comment-style cards (`comments`) with the user's text at their own times |
 | `Pip` | source duration | the source with `pip` (a camera) in a corner while the camera has pictures, synced by `pip.offset`; captions on top as in Captioned |
+| `KineticType` | source duration | the `kinetic` schedule: each line centred, its units (words, or CJK characters) entering at their measured starts -- invisible before that frame, visible on it, never reflowing the line; `kineticStyle` pop, wipe, tracking or rise; `kineticReveal: "char"` lets a unit's characters follow each other `kineticStagger` s apart. The current unit takes the accent colour. Needs `analyze.py --kinetic` |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
 ## Options (`--options look.json`)
@@ -79,6 +81,10 @@ Every key is optional.
 | `bubbles` | `[]` | Emphasis: speech bubbles `[{"text", "start", "end", "side"?}]` (`side`: `left` or `right`), the user's text, seconds on the source timeline |
 | `comments` | `[]` | Emphasis: comment-style cards `[{"text", "start", "end", "author"?}]`, top left, stacked while they overlap; the user's text |
 | `background` | `"#000000"` | the picture of a source-less run (analyze.py `--blank`): any CSS colour or gradient |
+| `kineticStyle` | `"pop"` | KineticType: how a unit enters: `pop` (scales down into place), `wipe` (a mask opens left to right), `tracking` (its characters close in), `rise` |
+| `kineticReveal` | `"char"` | KineticType: `char` (characters one after another from the unit's start) or `unit` (the whole unit at its start) |
+| `kineticStagger` | `0.04` | KineticType: seconds between characters with `kineticReveal: "char"`, 0–1 |
+| `kineticSize` | `0.09` | KineticType: text size as a fraction of the frame's short side, 0.01–0.5 |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.

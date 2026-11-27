@@ -9,6 +9,7 @@ import { BeatMontage } from "./compositions/BeatMontage";
 import { Karaoke } from "./compositions/Karaoke";
 import { Pip } from "./compositions/Pip";
 import { Emphasis } from "./compositions/Emphasis";
+import { KineticType } from "./compositions/KineticType";
 import { SAMPLE_TIMELINE, fullLengthFrames, highlightFrames, jumpcutFrames, outputFrame, type Props, type Timeline } from "./timeline";
 
 // Length and fps come from the measured timeline, never from constants; the frame is the
@@ -34,5 +35,6 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="Karaoke" component={Karaoke} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="Pip" component={Pip} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="Emphasis" component={Emphasis} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
+    <Composition id="KineticType" component={KineticType} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
   </>
 );
