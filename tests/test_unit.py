@@ -48,15 +48,27 @@ class BlankArgs(unittest.TestCase):
             self.refused(analyze.parse_fps, bad)
 
     def test_flags_that_need_footage_are_refused(self):
-        parse = analyze.build_parser().parse_args
+        def parse(argv):
+            return _common.parse_with_blank(analyze.build_parser(), argv)
         for argv in (["--blank", "5", "in.mp4"], ["--blank", "0"], ["--blank", "5", "--pip", "cam.mp4"],
                      ["--blank", "5", "--conform"], ["--blank", "5", "--highlights", "2"],
                      ["--blank", "5", "--chapters", "source"], ["--music", "a.wav"], ["--size", "640x360", "a.mp4"],
                      []):
             with self.subTest(argv=argv):
-                self.refused(analyze.blank_flags_check, parse(argv))
+                # argparse itself refuses a missing input (no --blank); blank_flags_check the rest
+                self.refused(lambda: analyze.blank_flags_check(parse(argv)))
         analyze.blank_flags_check(parse(["--blank", "5", "--size", "640x360", "--music", "a.wav", "--beats"]))
         analyze.blank_flags_check(parse(["a.mp4"]))
+
+    def test_input_stays_one_or_more_in_the_contract(self):
+        # a blank run leaves `input` out on the command line or sends the placeholder `-` (an MCP client must send
+        # one item: the contract's minItems stays 1)
+        for name in ("analyze", "pipeline"):
+            mod = __import__(name)
+            act = next(x for x in mod.build_parser()._actions if x.dest == "input")
+            self.assertEqual(act.nargs, "+")
+        for argv, want in ((["--blank", "5"], []), (["-", "--blank", "5"], []), (["a.mp4"], ["a.mp4"])):
+            self.assertEqual(_common.parse_with_blank(analyze.build_parser(), argv).input, want)
 
     def test_blank_timeline_is_valid_and_full_length(self):
         t = timeline(source={"path": None, "name": "blank", "duration": 15.0, "fps": 30.0, "width": 1080,

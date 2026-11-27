@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
-                     exact_rate, require_ffmpeg_skill, shell_join, stream_rate, version)
+                     exact_rate, require_ffmpeg_skill, shell_join, stream_rate, version, parse_with_blank)
 from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_emphasis,
                        read_word_timings, resolve_emphasis, youtube_chapter_warnings)
 
@@ -55,8 +55,8 @@ def file_fingerprint(path: Path) -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", nargs="*", help="source video (or audio) file; several are joined in order first "
-                                            "(none with --blank)")
+    p.add_argument("input", nargs="+", help="source video (or audio) file; several are joined in order first "
+                                            "(with --blank: none, or `-`)")
     p.add_argument("--joined", help="with several inputs: where the joined source goes (default: <first>_joined.mp4)")
     p.add_argument("--join-transition", default="none",
                    help="with several inputs: ffmpeg-skill join.py --transition (default none = straight cuts)")
@@ -515,7 +515,7 @@ def read_text_inputs(a: argparse.Namespace) -> Tuple[List[Dict[str, Any]], List[
 
 
 def main() -> None:
-    a = build_parser().parse_args()
+    a = parse_with_blank(build_parser())
     apply_common(a)
     blank_flags_check(a)
     if a.blank is not None:

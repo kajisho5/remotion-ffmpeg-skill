@@ -19,7 +19,7 @@ Measure a source with ffmpeg-skill and write timeline.json (+ captions from a fi
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `input` | string, repeatable |  | source video (or audio) file; several are joined in order first (none with --blank) |
+| `input` | string, repeatable |  | source video (or audio) file; several are joined in order first (with --blank: none, or `-`) |
 | `--joined` | string |  | with several inputs: where the joined source goes (default: <first>_joined.mp4) |
 | `--join-transition` | string | `none` | with several inputs: ffmpeg-skill join.py --transition (default none = straight cuts) |
 | `--join-duration` | number | `0.5` | transition length in seconds (default 0.5) |
@@ -181,7 +181,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first (none with --blank) |
+| `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first (with --blank: none, or `-`) |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
 | `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |

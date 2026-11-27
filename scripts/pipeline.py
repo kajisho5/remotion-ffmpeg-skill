@@ -18,15 +18,15 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (ASPECTS, BUILTIN_COMPOSITIONS, FITS, HERE, STATE, add_common, apply_common, die, emit, info,
-                     platform_aspect, shell_join)
+                     platform_aspect, shell_join, parse_with_blank)
 from deliver import PLATFORMS
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", nargs="*", help="source video; several are joined in order (ffmpeg-skill join.py) first "
-                                            "(none with --blank)")
+    p.add_argument("input", nargs="+", help="source video; several are joined in order (ffmpeg-skill join.py) first "
+                                            "(with --blank: none, or `-`)")
     p.add_argument("--project", required=True, help="Remotion project folder made by init.py")
     p.add_argument("--comp", required=True, help=f"composition id ({', '.join(BUILTIN_COMPOSITIONS)}, or yours)")
     p.add_argument("--captions", help="SRT / WebVTT / JSON cues for the timeline")
@@ -79,7 +79,7 @@ def step(name: str, script: str, args: List[str], steps: List[Dict[str, Any]]) -
 
 
 def main() -> None:
-    a = build_parser().parse_args()
+    a = parse_with_blank(build_parser())
     apply_common(a)
     inputs = [Path(i).expanduser() for i in a.input]
     missing = [str(i) for i in inputs if not i.is_file()]
