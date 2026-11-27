@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _sparse
-from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
+from _common import (loop_range, BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
                      ffskill, ffskill_cmd, frame_size, info, load_look, load_timeline, prepare_props, refuse_existing,
                      remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
 
@@ -99,7 +99,8 @@ def remotion_render_cmd(project: Path, comp: str, output: Path, props: Path, a: 
 
 def verify(out_probe: Dict[str, Any], timeline: Dict[str, Any], comp: str,
            frames: Optional[Tuple[int, int]], fast: bool,
-           frame: Optional[Dict[str, Any]] = None) -> Tuple[bool, List[Dict[str, Any]]]:
+           frame: Optional[Dict[str, Any]] = None,
+           options: Optional[Dict[str, Any]] = None) -> Tuple[bool, List[Dict[str, Any]]]:
     src = timeline["source"]
     fps = float(src["fps"])
     v = out_probe.get("video") or {}
@@ -117,7 +118,7 @@ def verify(out_probe: Dict[str, Any], timeline: Dict[str, Any], comp: str,
     out_fps = float(v.get("fps") or 0)
     row("fps", abs(out_fps - fps) < 0.01, out_fps, fps)
 
-    want = (frames[1] - frames[0] + 1) if frames else expected_frames(comp, timeline)
+    want = (frames[1] - frames[0] + 1) if frames else expected_frames(comp, timeline, options)
     duration = float(out_probe.get("duration") or v.get("duration") or 0)
     nb = v.get("nb_frames")
     if want is not None and isinstance(nb, int) and nb > 0:
@@ -202,6 +203,11 @@ def main() -> None:
     output = output.resolve()
     refuse_existing(output)
 
+    if a.comp == "Visualizer":
+        loop_range(timeline, options)      # refuses a loop the measured beats cannot hold, before any render
+        if not (timeline["source"].get("has_audio") and timeline["source"].get("path")):
+            die("Visualizer draws the audio: this timeline's source has none (give a source with audio, or "
+                "analyze.py --blank with --music)", "input")
     if a.comp == "KineticType" and not timeline.get("kinetic"):
         die("KineticType draws the schedule analyze.py --kinetic writes (words or measured beats); this timeline "
             "has none: re-run analyze.py with --kinetic", "input")
@@ -240,7 +246,7 @@ def main() -> None:
     if STATE.dry_run:
         plan = [shell_join(cmd)] + ([shell_join(ffskill_cmd("overlay", ov_args))] if a.overlay else [])
         emit({"output": str(output), "commands": plan, "props": str(props_path),
-              "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline),
+              "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline, options),
               "frame": frame, "font": font_note, "sparse": sparse_note},
              f"would render {a.comp} -> {output}")
         return
@@ -269,7 +275,7 @@ def main() -> None:
             graphics.unlink(missing_ok=True)
 
     probe = ffskill("probe", [str(output)])
-    ok, rows = verify(probe, timeline, a.comp, frames, a.fast, frame)
+    ok, rows = verify(probe, timeline, a.comp, frames, a.fast, frame, options)
     look: Optional[str] = None
     look_error: Optional[str] = None
     commands.append(probe["_command"])

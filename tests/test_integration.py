@@ -551,7 +551,8 @@ class Blank(unittest.TestCase):
         tl = self.tmp / "tiny.timeline.json"
         code, res = script("analyze", "--blank", "1", "--size", "320x180", "-o", tl)
         self.assertEqual(code, 0, res)
-        for comp in (c for c in _common.BUILTIN_COMPOSITIONS if c not in NEEDS_KINETIC):
+        # KineticType needs a --kinetic schedule, Visualizer audio: a blank without music has neither (both refused)
+        for comp in (c for c in _common.BUILTIN_COMPOSITIONS if c not in NEEDS_KINETIC | {"Visualizer"}):
             with self.subTest(comp=comp):
                 code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", tl,
                                    "-o", self.tmp / f"tiny_{comp}.mp4", "--no-look")
@@ -673,6 +674,118 @@ class KineticType(unittest.TestCase):
                            "-o", self.tmp / "kin.mp4", "--fast")
         self.assertEqual(code, 0, res)
         self.assertTrue(res["verified"])
+
+
+QC_SKILL_DIR = os.environ.get("QC_SKILL_DIR")
+
+
+def rgb_frames(path: Path, which):
+    """The given frames of a video as 8-bit RGB byte strings (decoded by ffmpeg, at the stream's own size)."""
+    probe = _common.ffskill("probe", [str(path)])
+    w, h = probe["video"]["width"], probe["video"]["height"]
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True, check=True).stdout
+    size = w * h * 3
+    frames = [raw[i:i + size] for i in range(0, len(raw), size)]
+    return [frames[i] for i in which], len(frames)
+
+
+def mean_abs(a: bytes, b: bytes) -> float:
+    return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class Visualizer(unittest.TestCase):
+    """The Visualizer draws the audio at its frame, and its --loop length is a whole number of measured bars."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-vis-")
+        cls.tone = cls.tmp / "tone.wav"   # silence, then a 440 Hz test tone from exactly 1.000 s
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "aevalsrc='0.6*sin(2*PI*440*t)*gte(t\\,1)':s=44100:d=3", str(cls.tone)], check=True)
+        cls.beat = cls.tmp / "beat120.wav"   # 120 BPM: an 80 Hz hit every 0.5 s
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "aevalsrc='0.8*sin(2*PI*80*t)*exp(-mod(t\\,0.5)*12)':s=44100:d=8", str(cls.beat)], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def timeline(self, name, *args):
+        tl = self.tmp / f"{name}.timeline.json"
+        code, res = script("analyze", "--blank", *args, "--size", "640x360", "-o", tl)
+        self.assertEqual(code, 0, res)
+        return tl
+
+    def test_loop_needs_measured_bars(self):
+        if not ffmpeg_skill_at_least(3, 2, 0):
+            self.skipTest("ffmpeg-skill measures audio-only files from 3.2.0")
+        tl = self.timeline("beat", "8", "--music", self.beat, "--beats")
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        # 16 beats 0.5 s apart: 3 whole bars of 4 with a beat on each side for the seam; seam halfway between beats
+        self.assertEqual(_common.loop_range(t, {"loopBars": 0}), (8, 180, 3))
+        self.assertEqual(_common.expected_frames("Visualizer", t, {"loopBars": 2}), 120)
+        self.assertEqual(_common.expected_frames("Visualizer", t), 240)
+        opts = self.tmp / "toomany.json"
+        opts.write_text(json.dumps({"loopBars": 9}), encoding="utf-8")
+        proj = self.tmp / "proj"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--comp", "Visualizer", "--timeline", tl, "--options", opts,
+                           "--dry-run")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+        self.assertIn("hold 3 whole bar", res["error"])
+        silent = self.timeline("silent", "2")
+        code, res = script("render", "--project", proj, "--comp", "Visualizer", "--timeline", silent, "--dry-run")
+        self.assertEqual((code, res.get("kind")), (2, "input"), res)
+
+    @unittest.skipUnless(PROJECT and ffmpeg_skill_at_least(3, 2, 0), "needs RFS_PROJECT and ffmpeg-skill 3.2.0+")
+    def test_real_bars_react_to_a_tone_on_its_frame(self):
+        tl = self.timeline("tone", "3", "--music", self.tone, "--no-silence")
+        code, res = script("still", "--project", PROJECT, "--comp", "Visualizer", "--timeline", tl,
+                           "--frame", "29", "--frame", "30", "--out-dir", self.tmp / "tone")
+        self.assertEqual(code, 0, res)
+        bars = []
+        for png in res["outputs"]:   # the bars' half of the frame (the ring sits above it), mean of its grey levels
+            raw = subprocess.run(["ffmpeg", "-v", "error", "-i", png, "-vf", "crop=640:150:0:210,format=gray",
+                                  "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
+            bars.append(sum(raw) / len(raw))
+        self.assertLess(bars[0], 5.0, bars)          # frame 29 (0.967 s): no tone yet, flat 2 px bars
+        self.assertGreater(bars[1], 30.0, bars)      # frame 30 (1.000 s): the tone starts, the bars rise
+
+    @unittest.skipUnless(PROJECT and ffmpeg_skill_at_least(3, 2, 0), "needs RFS_PROJECT and ffmpeg-skill 3.2.0+")
+    def test_real_loop_seam(self):
+        tl = self.timeline("loop", "8", "--music", self.beat, "--beats")
+        opts = self.tmp / "loop.json"
+        opts.write_text(json.dumps({"loopBars": 0}), encoding="utf-8")
+        out = self.tmp / "loop.mp4"
+        code, res = script("render", "--project", PROJECT, "--comp", "Visualizer", "--timeline", tl, "--options", opts,
+                           "-o", out, "--no-look")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+        # qc-skill's measure (video.loop_seam, ADR-026): the last -> first step against the median step inside the
+        # 4 frames on each side; one frame short (a loop that is not whole bars) jumps
+        n = 180
+        (first, last), total = rgb_frames(out, [0, n - 1])
+        self.assertEqual(total, n)
+        inside_idx = list(range(0, 5)) + list(range(n - 5, n))
+        fr, _ = rgb_frames(out, inside_idx)
+        steps = sorted([mean_abs(fr[i], fr[i + 1]) for i in range(4)] + [mean_abs(fr[i], fr[i + 1]) for i in range(5, 9)])
+        reference = (steps[3] + steps[4]) / 2
+        ratio = mean_abs(last, first) / reference
+        self.assertLessEqual(ratio, 1.3, (ratio, reference))
+        short_last, _ = rgb_frames(out, [n - 2])
+        self.assertGreater(mean_abs(short_last[0], first) / reference, 1.3)
+        if QC_SKILL_DIR:
+            req = self.tmp / "qc.json"
+            req.write_text(json.dumps({"operation": "check", "kind": "video", "input": str(out),
+                                       "rules": {"video": {"loop_seam": {"max_seam_ratio": 1.3}}}}), encoding="utf-8")
+            proc = subprocess.run([sys.executable, "-m", "qc_skill.cli", "run", str(req), "--json", "--no-cache",
+                                   "--workspace", str(self.tmp)], capture_output=True, text=True,
+                                  env={**os.environ, "PYTHONPATH": str(Path(QC_SKILL_DIR) / "src")})
+            check = next(c for c in json.loads(proc.stdout)["report"]["checks"]
+                         if c["check_id"] == "video.loop_seam_within_limit")
+            self.assertEqual(check["status"], "PASS", check)
 
 
 @unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")

@@ -123,6 +123,35 @@ class Kinetic(unittest.TestCase):
         self.assertTrue(any("past its end" in w for w in k["warnings"]))
 
 
+class VisualizerLoop(unittest.TestCase):
+    """loopBars: whole measured bars, the seam halfway between two beats (src/timeline.ts visualizerRange)."""
+
+    def tl(self, n, step=0.5, usable=True):
+        return timeline(beats={"times": [round(0.1 + i * step, 3) for i in range(n)], "tempo_bpm": 120.0,
+                               "confidence": 0.9, "usable": usable})
+
+    def test_range(self):
+        t = self.tl(14)                       # 14 beats: 3 bars of 4 need 14 (one more on each side)
+        self.assertEqual(_common.loop_range(t, {"loopBars": 0}), (_common.sec_to_frames(0.35, 30), 180, 3))
+        self.assertEqual(_common.loop_range(t, {"loopBars": 1})[1:], (60, 1))
+        self.assertEqual(_common.loop_range(t, {"loopBars": 0, "beatsPerBar": 3})[2], 4)
+        self.assertIsNone(_common.loop_range(t, {}))
+        self.assertEqual(_common.expected_frames("Visualizer", t, {"loopBars": 2}), 120)
+        self.assertEqual(_common.expected_frames("Visualizer", t), 240)
+
+    def test_refused_without_enough_measured_beats(self):
+        for t, o in ((self.tl(5), {"loopBars": 0}), (self.tl(14), {"loopBars": 4}), (self.tl(14, usable=False),
+                                                                                     {"loopBars": 0})):
+            with self.assertRaises(SystemExit):
+                _common.loop_range(t, o)
+
+    def test_options(self):
+        self.assertEqual(_common.validate_options({"visualizer": "radial", "visualizerBars": 64, "loopBars": None,
+                                                   "beatsPerBar": 3}), [])
+        for bad in ({"visualizer": "dots"}, {"visualizerBars": 4}, {"loopBars": -1}, {"beatsPerBar": 0}):
+            self.assertTrue(_common.validate_options(bad), bad)
+
+
 class Captions(unittest.TestCase):
     def test_srt_multiline_and_tags(self):
         cues = _captions.parse_srt_or_vtt(

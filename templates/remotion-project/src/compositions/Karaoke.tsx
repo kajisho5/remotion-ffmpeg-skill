@@ -35,7 +35,7 @@ export const Karaoke: React.FC<Props> = (props) => {
   );
 };
 
-const KaraokeCue: React.FC<{ cue: Caption; words: Caption[]; len: number; o: Options; fontFamily: string }> = ({
+export const KaraokeCue: React.FC<{ cue: Caption; words: Caption[]; len: number; o: Options; fontFamily: string }> = ({
   cue,
   words,
   len,

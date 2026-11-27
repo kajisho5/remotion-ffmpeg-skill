@@ -330,14 +330,46 @@ def sec_to_frames(seconds: float, fps: float) -> int:
     return int(math.floor(seconds * fps + 0.5))
 
 
-def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
+def loop_range(t: Dict[str, Any], options: Optional[Dict[str, Any]]) -> Optional[Tuple[int, int, int]]:
+    """The Visualizer's loop (visualizerRange in src/timeline.ts mirrors it): (first frame, frames, bars), or None
+    without loopBars. loopBars * beatsPerBar measured beats, the seam halfway between two beats (where motion that
+    hits on the beat is quietest): from halfway between beats 0 and 1 to halfway between beats k and k + 1.
+    Refused (die) when the measured beats cannot hold one whole bar, or the bars asked for."""
+    o = options or {}
+    want = o.get("loopBars")
+    if want is None:
+        return None
+    fps = float(t["source"]["fps"])
+    beats = t.get("beats") or {}
+    times = [float(b) for b in (beats.get("times") or []) if float(b) < float(t["source"]["duration"])] \
+        if beats.get("usable") else []
+    per = max(1, int(round(o.get("beatsPerBar", 4))))
+    most = (len(times) - 2) // per if len(times) >= 2 else 0
+    if most < 1:
+        die(f"loopBars needs the measured beat grid to hold at least one whole bar ({per} beats, plus one on each "
+            "side for the seam): " + ("analyze.py --beats measured none usable" if not times
+                                      else f"{len(times)} usable beats measured"), "input")
+    if want and want > most:
+        die(f"loopBars {want}: the measured beats hold {most} whole bar(s) of {per} beats", "input")
+    bars = want or most
+    k = bars * per
+    start = sec_to_frames((times[0] + times[1]) / 2, fps)
+    return start, max(1, sec_to_frames((times[k] + times[k + 1]) / 2, fps) - start), bars
+
+
+def expected_frames(comp: str, t: Dict[str, Any], options: Optional[Dict[str, Any]] = None) -> Optional[int]:
     """Duration the built-in compositions compute in calculateMetadata (src/timeline.ts mirrors this).
 
     Custom compositions return None: their length is whatever their own calculateMetadata says,
     and render.py then only reports the measured numbers.
     """
     fps = float(t["source"]["fps"])
-    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis", "KineticType"):
+    if comp == "Visualizer":
+        loop = loop_range(t, options)
+        if loop:
+            return loop[1]
+    if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis", "KineticType",
+                "Visualizer"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -352,7 +384,7 @@ def expected_frames(comp: str, t: Dict[str, Any]) -> Optional[int]:
 # ---------------------------------------------------------------- Remotion project
 
 BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip",
-                        "Emphasis", "KineticType")
+                        "Emphasis", "KineticType", "Visualizer")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -679,6 +711,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
     "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
     "kineticStyle": str, "kineticReveal": str, "kineticStagger": (int, float), "kineticSize": (int, float),
+    "visualizer": str, "visualizerBars": int, "loopBars": (int, type(None)), "beatsPerBar": int,
 }
 
 
@@ -721,6 +754,15 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
     if isinstance(o.get("kineticSize"), (int, float)) and not isinstance(o["kineticSize"], bool) \
             and not 0.01 <= o["kineticSize"] <= 0.5:
         p.append("kineticSize must be between 0.01 and 0.5 (a fraction of the frame's short side)")
+    if "visualizer" in o and o["visualizer"] not in ("bars", "spectrum", "radial", "waveform"):
+        p.append("visualizer must be bars, spectrum, radial or waveform")
+    if isinstance(o.get("visualizerBars"), int) and not isinstance(o["visualizerBars"], bool) \
+            and not 8 <= o["visualizerBars"] <= 256:
+        p.append("visualizerBars must be between 8 and 256")
+    if isinstance(o.get("loopBars"), int) and not isinstance(o["loopBars"], bool) and o["loopBars"] < 0:
+        p.append("loopBars must be 0 (as many whole bars as measured), a number of bars, or null")
+    if isinstance(o.get("beatsPerBar"), int) and not isinstance(o["beatsPerBar"], bool) and not 1 <= o["beatsPerBar"] <= 16:
+        p.append("beatsPerBar must be between 1 and 16")
     if "emphasisStyle" in o and o["emphasisStyle"] not in ("pop", "color", "box"):
         p.append("emphasisStyle must be pop, color or box")
     for key, extra in (("bubbles", "side"), ("comments", "author")):
