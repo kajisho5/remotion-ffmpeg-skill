@@ -69,8 +69,7 @@ TOOL_META: Dict[str, Dict[str, Any]] = {
     "render": {
         "role": "execution",
         "summary": "Render a composition from a timeline, verify it (frames, fps, size, audio) and write a contact sheet.",
-        "writes": "video file (+ contact sheet PNG; with --layers one ProRes 4444 .mov per graphic group and a "
-                  "layers.json manifest)",
+        "writes": "video file (+ contact sheet PNG)",
         "verification": "exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch",
         "ffmpeg_skill": ["probe", "look", "overlay (--overlay; --place with --sparse)", "_contract doctor (CJK font lookup)"],
         "dry_run": True,

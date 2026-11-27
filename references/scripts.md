@@ -113,7 +113,7 @@ Render single frames as PNG to check the look before a full render.
 Render a composition from a timeline, verify it (frames, fps, size, audio) and write a contact sheet.
 
 - Role: execution — writes a new media artifact; inputs are never modified
-- Writes: video file (+ contact sheet PNG; with --layers one ProRes 4444 .mov per graphic group and a layers.json manifest)
+- Writes: video file (+ contact sheet PNG)
 - Verifies: exact frame count / fps / size / audio against the timeline; non-zero exit on mismatch
 - ffmpeg-skill: probe, look, overlay (--overlay; --place with --sparse), _contract doctor (CJK font lookup)
 - `--dry-run`: plans without writing
