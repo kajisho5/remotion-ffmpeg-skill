@@ -40,7 +40,7 @@ export const BeatMontage: React.FC<Props> = (props) => {
         const src = { ...timeline.source, has_audio: false };
         return (
           <Sequence key={i} from={from} durationInFrames={len} name={`shot ${i + 1}`}>
-            <SourceVideo source={src} fit={fit} trimBefore={start} trimAfter={start + len} />
+            <SourceVideo background={o.background} source={src} fit={fit} trimBefore={start} trimAfter={start + len} />
             {i > 0 ? <BeatFlash accent={o.accent} /> : null}
           </Sequence>
         );

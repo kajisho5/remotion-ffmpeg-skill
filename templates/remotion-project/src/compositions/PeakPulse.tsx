@@ -45,7 +45,7 @@ export const PeakPulse: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {/* In overlay mode the source (and its slight zoom on peaks) is left to the composite step. */}
-      {overlay ? null : <SourceVideo source={timeline.source} fit={outputFrame(props).fit} style={{ transform: `scale(${1 + 0.02 * o.pulse * hit})` }} />}
+      {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} style={{ transform: `scale(${1 + 0.02 * o.pulse * hit})` }} />}
       <AbsoluteFill style={{ boxShadow: `inset 0 0 ${glow * 2}px ${glow}px ${o.accent}`, opacity: 0.85, pointerEvents: "none" }} />
       {flash > 0 ? <AbsoluteFill style={{ backgroundColor: "white", opacity: 0.18 * flash }} /> : null}
       {o.progressBar ? (

@@ -21,7 +21,7 @@ export const Titled: React.FC<Props> = (props) => {
     .filter((x): x is { sc: { start: number; end: number }; text: string } => Boolean(x.text));
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
-      {overlay ? null : <SourceVideo source={timeline.source} fit={outputFrame(props).fit} />}
+      {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
       {sceneCards.map(({ sc, text }, i) => {
         const from = secToFrames(sc.start, fps);
         const dur = Math.max(1, Math.min(secToFrames(sc.end, fps), from + Math.round(fps * 2.5)) - from);

@@ -16,7 +16,7 @@ export const Captioned: React.FC<Props> = (props) => {
   const { fps } = useVideoConfig();
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
-      {overlay ? null : <SourceVideo source={timeline.source} fit={outputFrame(props).fit} />}
+      {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
       {timeline.captions.map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);

@@ -674,7 +674,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "progressBar": bool, "driver": str, "lowerThirds": list, "sceneTitles": list,
     "title": (str, type(None)), "beatsPerCut": int, "chapterSeconds": (int, float),
     "pipCorner": str, "pipSize": (int, float), "pipShape": str, "pipAudio": bool,
-    "emphasisStyle": str, "bubbles": list, "comments": list,
+    "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
 }
 
 

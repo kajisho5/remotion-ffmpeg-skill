@@ -497,6 +497,84 @@ class Analyze(unittest.TestCase):
                 self.assertTrue(res["look"] and Path(res["look"]).is_file(), res.get("look_error"))
 
 
+def ffmpeg_skill_at_least(*want: int) -> bool:
+    v = _common.ffmpeg_skill_version(_common.find_ffmpeg_skill()) if _common.find_ffmpeg_skill() else None
+    try:
+        return tuple(int(x) for x in (v or "0").split(".")[:3]) >= want
+    except ValueError:
+        return False
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class Blank(unittest.TestCase):
+    """analyze.py / pipeline.py --blank: a timeline with no footage, the music measured as a source's audio is."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-blank-")
+        cls.music = cls.tmp / "bgm.wav"   # 15 s of a decaying 80 Hz hit every 0.5 s (120 BPM), fictional test audio
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "aevalsrc='0.8*sin(2*PI*80*t)*exp(-mod(t\\,0.5)*12)':s=44100:d=15", str(cls.music)], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_blank_without_music(self):
+        tl = self.tmp / "silent.timeline.json"
+        code, res = script("analyze", "--blank", "4", "--size", "640x360", "--fps", "25", "-o", tl)
+        self.assertEqual(code, 0, res)
+        self.assertEqual(_contract.missing_output_keys("analyze", res), [])
+        self.assertEqual(res["commands"], [])
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(_common.validate_timeline(t), [])
+        self.assertEqual({k: t["source"][k] for k in ("duration", "fps", "width", "height", "has_video", "has_audio",
+                                                      "blank")},
+                         {"duration": 4.0, "fps": 25.0, "width": 640, "height": 360, "has_video": False,
+                          "has_audio": False, "blank": True})
+        self.assertEqual(_common.expected_frames("Captioned", t), 100)
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_every_composition_on_a_blank(self):
+        tl = self.tmp / "tiny.timeline.json"
+        code, res = script("analyze", "--blank", "1", "--size", "320x180", "-o", tl)
+        self.assertEqual(code, 0, res)
+        for comp in _common.BUILTIN_COMPOSITIONS:
+            with self.subTest(comp=comp):
+                code, res = script("render", "--project", PROJECT, "--comp", comp, "--timeline", tl,
+                                   "-o", self.tmp / f"tiny_{comp}.mp4", "--no-look")
+                self.assertEqual(code, 0, res)
+                self.assertTrue(res["verified"])
+
+    @unittest.skipUnless(ffmpeg_skill_at_least(3, 2, 0), "ffmpeg-skill measures audio-only files from 3.2.0")
+    def test_music_is_measured_for_peaks_and_beats(self):
+        tl = self.tmp / "bgm.timeline.json"
+        code, res = script("analyze", "--blank", "12", "--size", "1080x1920", "--music", self.music, "--beats", "-o", tl)
+        self.assertEqual(code, 0, res)
+        t = json.loads(tl.read_text(encoding="utf-8"))
+        self.assertEqual(_common.validate_timeline(t), [])
+        self.assertTrue(t["source"]["has_audio"])
+        self.assertEqual(Path(t["source"]["path"]), self.music.resolve())
+        self.assertTrue(t["beats"]["usable"], t["beats"])
+        self.assertAlmostEqual(t["beats"]["tempo_bpm"], 120, delta=1)
+        self.assertTrue(all(b < 12 for b in t["beats"]["times"]))           # cut at the blank's end
+        self.assertTrue(any("cut at the blank's end" in w for w in t["warnings"]))
+        self.assertEqual(t["blank"]["music"]["duration"], 15.0)
+
+    @unittest.skipUnless(PROJECT and ffmpeg_skill_at_least(3, 2, 0),
+                         "needs RFS_PROJECT and ffmpeg-skill 3.2.0 or later")
+    def test_real_pipeline_blank_with_music(self):
+        out = self.tmp / "out"
+        code, res = script("pipeline", "--blank", "15", "--size", "1080x1920", "--music", self.music,
+                           "--project", PROJECT, "--comp", "PeakPulse", "--out-dir", out)
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+        probe = _common.ffskill("probe", [res["render"]])
+        self.assertEqual(probe["video"]["nb_frames"], 450)                   # 15.0 s at 30 fps
+        self.assertEqual((probe["video"]["width"], probe["video"]["height"]), (1080, 1920))
+        self.assertTrue(probe.get("audio"))
+
+
 @unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
 class NtscRate(unittest.TestCase):
     """velisa/timebase@1 (docs/adr/0004): a 30000/1001 source is drawn at 30000/1001, not at the probe's 29.97."""

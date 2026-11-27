@@ -15,6 +15,17 @@ export type Source = {
   height: number;
   has_video: boolean;
   has_audio: boolean;
+  /** analyze.py --blank: no footage. The picture is options.background; src (if any) is the music. */
+  blank?: boolean;
+};
+
+/** A source-less run (analyze.py --blank): the asked size, rate and length, and the music measured (or null). */
+export type Blank = {
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  music: { path: string; name: string; duration: number; fingerprint: string } | null;
 };
 
 export type Caption = { start: number; end: number; text: string };
@@ -87,6 +98,8 @@ export type Timeline = {
   /** Emphasised caption words (analyze.py --emphasis); drawn by the Emphasis composition. */
   emphasis?: Emphasis[];
   pip?: Pip | null;
+  /** Set by analyze.py --blank (a timeline with no footage); absent or null otherwise. */
+  blank?: Blank | null;
   /** Set when analyze.py --conform measured a conformed copy instead of the original (null otherwise). */
   conform?: Conform | null;
   warnings?: string[];
@@ -133,6 +146,8 @@ export type Options = {
   bubbles: Bubble[];
   /** Emphasis: comment-style cards (text and author from the user). */
   comments: CommentCard[];
+  /** The picture of a source-less run (analyze.py --blank): a CSS colour or gradient. */
+  background: string;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -157,6 +172,7 @@ export const DEFAULT_OPTIONS: Options = {
   emphasisStyle: "pop",
   bubbles: [],
   comments: [],
+  background: "#000000",
 };
 
 /** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */

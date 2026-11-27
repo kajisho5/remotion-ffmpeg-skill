@@ -17,6 +17,8 @@ props (`{ "timeline": ..., "options": ..., "frame": ..., "font": ..., "overlay":
 | `source.fps` | number | probe.py | composition fps = source fps |
 | `source.width` / `height` | px | probe.py | composition size = source size |
 | `source.has_video` / `has_audio` | bool | probe.py | |
+| `source.blank` | bool (optional) | analyze.py `--blank` | `true` for a source-less run: no footage, the picture is the `background` option; `source.path` is the music (or null), `has_video` false |
+| `blank` | object \| null (optional) | analyze.py `--blank` | `{duration, width, height, fps, music}`: the caller's length, size and rate (not measurements) and the music's `{path, name, duration, fingerprint}` or null. The music's peaks, beats and silences fill `peaks`, `beats`, `silences` and `speech`, cut at the blank's end |
 | `scenes` | `[{start, end}]` | scenes.py | shot boundaries (one scene = whole file when skipped) |
 | `silences` | `[[start, end]]` | silence.py `--list` | measured silent gaps |
 | `speech` | `[[start, end]]` | silence.py `--list` | ranges kept between silences (with margin) |
@@ -76,6 +78,7 @@ Every key is optional.
 | `emphasisStyle` | `"pop"` | Emphasis: `pop` (scales up, accent colour), `color` (accent colour) or `box` (accent box, dark text) for an emphasised word without its own `style` |
 | `bubbles` | `[]` | Emphasis: speech bubbles `[{"text", "start", "end", "side"?}]` (`side`: `left` or `right`), the user's text, seconds on the source timeline |
 | `comments` | `[]` | Emphasis: comment-style cards `[{"text", "start", "end", "author"?}]`, top left, stacked while they overlap; the user's text |
+| `background` | `"#000000"` | the picture of a source-less run (analyze.py `--blank`): any CSS colour or gradient |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.

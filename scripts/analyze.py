@@ -21,6 +21,7 @@ Examples:
   python3 analyze.py talk.mp4 --words talk.transcript.json   # captions from a transcription-skill transcript
   python3 analyze.py talk.mp4 --words talk.transcript.json --emphasis words.json   # Emphasis composition
   python3 analyze.py phone_hdr.mov --conform                  # VFR / HDR: measure and draw on a CFR SDR copy
+  python3 analyze.py --blank 15 --size 1080x1920 --music bgm.wav --beats   # no footage: a 15 s blank timeline
 """
 import argparse
 import hashlib
@@ -34,7 +35,7 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (STATE, TIMELINE_SCHEMA, SKILL_ID, add_common, apply_common, default_output, die,
                      emit, ffmpeg_skill_version, ffskill, ffskill_cmd, info, refuse_existing,
-                     require_ffmpeg_skill, shell_join, stream_rate, version)
+                     exact_rate, require_ffmpeg_skill, shell_join, stream_rate, version)
 from _captions import (CaptionError, cues_from_words, parse_chapters, read_captions, read_emphasis,
                        read_word_timings, resolve_emphasis, youtube_chapter_warnings)
 
@@ -54,7 +55,8 @@ def file_fingerprint(path: Path) -> str:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input", nargs="+", help="source video (or audio) file; several are joined in order first")
+    p.add_argument("input", nargs="*", help="source video (or audio) file; several are joined in order first "
+                                            "(none with --blank)")
     p.add_argument("--joined", help="with several inputs: where the joined source goes (default: <first>_joined.mp4)")
     p.add_argument("--join-transition", default="none",
                    help="with several inputs: ffmpeg-skill join.py --transition (default none = straight cuts)")
@@ -93,6 +95,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--conform-fps", type=float, metavar="FPS",
                    help="with --conform: the constant frame rate for a VFR source (default: the stream's base rate, "
                         "r_frame_rate, so no frame is dropped)")
+    p.add_argument("--blank", type=float, metavar="SECONDS",
+                   help="a source-less run: a timeline of this many seconds with no footage (a plain background), "
+                        "so a composition draws from nothing. With --music the music plays under it and is measured "
+                        "for peaks (and --beats) as a source's audio is; no input file is given")
+    p.add_argument("--size", metavar="WxH", help="with --blank: the frame size in px, even numbers (default 1920x1080)")
+    p.add_argument("--fps", metavar="RATE", help="with --blank: the frame rate, e.g. 30, 25, 30000/1001 (default 30)")
+    p.add_argument("--music", metavar="FILE",
+                   help="with --blank: the music (any file with an audio stream) that plays under the blank timeline "
+                        "from 0 s; measured with ffmpeg-skill (scenes.py peaks and --beats, silence.py). Cut at the "
+                        "blank's end when longer, silence after it when shorter")
     p.add_argument("--beats", action="store_true", help="also measure the beat grid (scenes.py --beats)")
     p.add_argument("--highlights", type=int, metavar="N",
                    help="also rank N highlight ranges (scenes.py --highlights; audio energy) for the Highlights composition")
@@ -272,25 +284,188 @@ def conform_source(label: str, src: Path, probe: Dict[str, Any], out: Path, fps:
     return out, after, record
 
 
-def main() -> None:
-    a = build_parser().parse_args()
-    apply_common(a)
-    inputs = [Path(i).expanduser() for i in a.input]
-    missing = [str(i) for i in inputs if not i.is_file()]
-    if missing:
-        die(f"input not found: {', '.join(missing)}", "input")
-    src = inputs[0]
-    joined: Path = Path(a.joined).expanduser() if a.joined else default_output(src, "_joined", ".mp4")
-    out = Path(a.output) if a.output else default_output(joined if len(inputs) > 1 else src, ".timeline", ".json")
-    refuse_existing(out)
-    if (a.conformed or a.conform_fps is not None) and not a.conform:
-        die("--conformed / --conform-fps need --conform", "input")
-    if a.conform_fps is not None and not 0 < a.conform_fps <= 240:
-        die(f"--conform-fps must be between 0 and 240, got {a.conform_fps:g}", "input")
-    conformed: Path = (Path(a.conformed).expanduser() if a.conformed
-                       else default_output(joined if len(inputs) > 1 else src, "_conformed", ".mp4"))
-    skill = require_ffmpeg_skill()
+# ---------------------------------------------------------------- source-less runs (--blank)
 
+BLANK_MAX_SECONDS = 24 * 3600.0
+# Flags that only mean something with footage: refused with --blank instead of silently doing nothing.
+BLANK_REFUSES = (("joined", "--joined"), ("pip", "--pip"), ("pip_offset", "--pip-offset"), ("conform", "--conform"),
+                 ("conformed", "--conformed"), ("conform_fps", "--conform-fps"), ("highlights", "--highlights"),
+                 ("target", "--target"))
+
+
+def parse_size(spec: Optional[str]) -> Tuple[int, int]:
+    """`WxH` -> (W, H): positive even integers (H.264 needs even sides), at most 8192."""
+    if spec is None:
+        return 1920, 1080
+    parts = str(spec).lower().replace("×", "x").split("x")
+    try:
+        w, h = (int(x) for x in parts)
+    except ValueError:
+        die(f"--size must look like 1080x1920, got {spec!r}", "input")
+    if not (16 <= w <= 8192 and 16 <= h <= 8192) or w % 2 or h % 2:
+        die(f"--size {spec}: both sides must be even numbers between 16 and 8192 px", "input")
+    return w, h
+
+
+def parse_fps(spec: Optional[str]) -> float:
+    if spec is None:
+        return 30.0
+    r = exact_rate(spec)
+    if r is None or not 1 <= r <= 240:
+        die(f"--fps must be a frame rate between 1 and 240 (30, 25, 29.97, 30000/1001), got {spec!r}", "input")
+    return float(r)
+
+
+def blank_flags_check(a: argparse.Namespace) -> None:
+    if a.blank is None:
+        given = [f for f, v in (("--size", a.size), ("--fps", a.fps), ("--music", a.music)) if v is not None]
+        if given:
+            die(f"{', '.join(given)} {'needs' if len(given) == 1 else 'need'} --blank SECONDS (a source's own size, rate and audio are measured)", "input")
+        if not a.input:
+            die("give an input file, or --blank SECONDS for a timeline with no footage", "input")
+        return
+    if a.input:
+        die("--blank makes a timeline with no footage: give no input file (the music goes in --music)", "input")
+    if not (0 < a.blank <= BLANK_MAX_SECONDS):
+        die(f"--blank must be more than 0 and at most {BLANK_MAX_SECONDS:g} seconds, got {a.blank:g}", "input")
+    bad = [flag for dest, flag in BLANK_REFUSES if getattr(a, dest, None) not in (None, False)]
+    if a.chapters == "source":
+        bad.append("--chapters source")
+    if bad:
+        die(f"{', '.join(bad)} {'needs' if len(bad) == 1 else 'need'} footage; --blank has none", "input")
+
+
+def blank_main(a: argparse.Namespace) -> None:
+    """A timeline with no footage: the given size, rate and length, and the music measured as a source's audio is."""
+    width, height = parse_size(a.size)
+    fps = parse_fps(a.fps)
+    duration = round(float(a.blank), 3)
+    music = Path(a.music).expanduser() if a.music else None
+    if music is not None and not music.is_file():
+        die(f"--music not found: {music}", "input")
+    if a.output:
+        out = Path(a.output).expanduser()
+    else:
+        out = default_output(music, "_blank.timeline", ".json") if music else Path("blank.timeline.json")
+    refuse_existing(out)
+    skill = require_ffmpeg_skill()
+    captions, words, transcript, emphasis, emphasis_warnings = read_text_inputs(a)
+
+    plan = []
+    if music is not None:
+        plan.append(shell_join(ffskill_cmd("probe", [str(music)])))
+        if not a.no_scenes:
+            plan.append(shell_join(ffskill_cmd("scenes", [str(music), *(["--beats"] if a.beats else [])])))
+        if not a.no_silence:
+            plan.append(shell_join(ffskill_cmd("silence", [str(music), *silence_args(a)])))
+    if STATE.dry_run:
+        emit({"output": str(out), "commands": plan}, f"would write {out} (blank {duration:g} s, {width}x{height} at "
+             f"{fps:g} fps{', music ' + music.name if music else ''}) after {len(plan)} ffmpeg-skill steps")
+        return
+
+    commands: List[str] = []
+    warnings: List[str] = []
+    peaks: List[Dict[str, float]] = []
+    beats: Any = None
+    silences: List[List[float]] = []
+    speech: List[List[float]] = [[0.0, duration]]
+    music_rec: Optional[Dict[str, Any]] = None
+    if music is not None:
+        pr = ffskill("probe", [str(music)])
+        commands.append(pr["_command"])
+        if not pr.get("audio"):
+            die(f"--music {music.name} has no audio stream", "input")
+        mdur = float((pr.get("audio") or {}).get("duration") or pr.get("duration") or 0)
+        if mdur <= 0:
+            die(f"--music {music.name} has no measurable duration", "input")
+        music_rec = {"path": str(music.resolve()), "name": music.name, "duration": round(mdur, 3),
+                     "fingerprint": file_fingerprint(music)}
+        if mdur < duration - 0.05:
+            warnings.append(f"--music {music.name} is {mdur:.3f} s, the blank {duration:g} s: silence after "
+                            f"{mdur:.3f} s")
+        elif mdur > duration + 0.05:
+            warnings.append(f"--music {music.name} is {mdur:.3f} s: cut at the blank's end ({duration:g} s)")
+        if not a.no_scenes:
+            # ffmpeg-skill 3.2.0 and later measure an audio-only file: peaks, and the beat grid with --beats.
+            sc = ffskill("scenes", [str(music), *(["--beats"] if a.beats else [])])
+            commands.append(sc["_command"])
+            peaks = [pk for pk in ({"time": round(float(p["time"]), 3), "rms": float(p.get("rms", 0))}
+                                   for p in sc.get("audio_peaks", [])) if pk["time"] < duration]
+            if a.beats:
+                grid = sc.get("beat_grid") or {}
+                times = [t for t in (round(float(b), 3) for b in (sc.get("beats") or [])) if t < duration]
+                beats = {"times": times, "tempo_bpm": grid.get("tempo_bpm"), "confidence": grid.get("confidence"),
+                         "usable": bool(grid.get("usable")) and bool(times)}
+        if not a.no_silence:
+            si = ffskill("silence", [str(music), *silence_args(a)])
+            commands.append(si["_command"])
+            clip = lambda r: [round(min(float(r[0]), duration), 3), round(min(float(r[1]), duration), 3)]  # noqa: E731
+            silences = [c for c in map(clip, si.get("silences", [])) if c[1] > c[0]]
+            if mdur < duration - 0.05:
+                silences.append([round(mdur, 3), duration])
+            speech = [c for c in map(clip, si.get("keep", [])) if c[1] > c[0]] or speech
+
+    if transcript:
+        ref = music_rec or {}
+        if not ref:
+            warnings.append("--words: a transcript with no --music: its times are used as written on the blank")
+        elif abs(transcript["duration"] - ref["duration"]) > TRANSCRIPT_DURATION_TOLERANCE:
+            die(f"--words: the transcript is of a {transcript['duration']:.3f} s file ({transcript['filename']}), "
+                f"the music measures {ref['duration']:.3f} s; transcribe this music", "input")
+        elif transcript["fingerprint"] != ref["fingerprint"]:
+            warnings.append(f"--words: the transcript was made from {transcript['filename']}, not these exact bytes "
+                            "(same length, so its times are used as written)")
+        warnings += transcript["warnings"]
+    late = [c for c in captions if c["start"] >= duration]
+    if late:
+        warnings.append(f"{len(late)} caption cue(s) start at or after the blank's end ({duration:g} s) and never show")
+
+    chapters: List[Dict[str, Any]] = []
+    if a.chapters:
+        chpath = Path(a.chapters).expanduser()
+        if not chpath.is_file():
+            die(f"chapters file not found: {chpath}", "input")
+        try:
+            chapters = parse_chapters(chpath.read_text(encoding="utf-8-sig"), duration)
+        except CaptionError as e:
+            die(f"{chpath}: {e}", "input")
+
+    timeline: Dict[str, Any] = {
+        "schema": TIMELINE_SCHEMA,
+        "generator": {"name": SKILL_ID, "version": version(), "ffmpeg_skill": ffmpeg_skill_version(skill)},
+        # No footage: the picture is the composition's own background; the music (if any) is the source's audio.
+        "source": {"path": music_rec["path"] if music_rec else None,
+                   "name": music.name if music else "blank", "duration": duration, "fps": fps,
+                   "width": width, "height": height, "has_video": False, "has_audio": bool(music_rec),
+                   "blank": True},
+        "blank": {"duration": duration, "width": width, "height": height, "fps": fps, "music": music_rec},
+        "scenes": [{"start": 0.0, "end": duration}],
+        "silences": silences, "speech": speech, "peaks": peaks, "beats": beats, "highlights": [], "clips": [],
+        "captions": captions, "words": words, "emphasis": emphasis, "chapters": chapters, "pip": None,
+        "conform": None,
+        "warnings": warnings + (youtube_chapter_warnings(chapters) if chapters else []) + emphasis_warnings,
+    }
+    for w in timeline["warnings"]:
+        info(f"warning: {w}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    import json
+    out.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+    emit({"output": str(out), "commands": commands, "verified": True,
+          "summary": {"duration": duration, "fps": fps, "size": f"{width}x{height}", "scenes": 1,
+                      "silences": len(silences), "speech_seconds": round(sum(e - s for s, e in speech), 3),
+                      "peaks": len(peaks), "captions": len(captions), "chapters": len(chapters), "pip_offset": None,
+                      "beats": bool(beats and beats.get("usable")), "tempo_bpm": (beats or {}).get("tempo_bpm"),
+                      "highlights": 0, "clips": 1, "words": len(words), "emphasis": len(emphasis), "conformed": [],
+                      "blank": True, "music": music.name if music else None},
+          "warnings": timeline["warnings"]},
+         f"wrote {out}: blank {duration:g} s, {width}x{height} at {fps:g} fps, "
+         + (f"music {music.name} ({len(peaks)} peaks" + (f", {len((beats or {}).get('times') or [])} beats" if beats else "")
+            + ")" if music else "no music") + f", {len(captions)} captions")
+
+
+def read_text_inputs(a: argparse.Namespace) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[Dict[str, Any]],
+                                                     List[Dict[str, Any]], List[str]]:
+    """--captions, --words and --emphasis: (captions, words, transcript or None, emphasis, emphasis warnings)."""
     captions: List[Dict[str, Any]] = []
     if a.captions:
         cpath = Path(a.captions).expanduser()
@@ -336,6 +511,33 @@ def main() -> None:
             emphasis, emphasis_warnings = resolve_emphasis(captions, words, entries, auto)
         except (CaptionError, ValueError) as e:
             die(f"--emphasis: {e}", "input")
+    return captions, words, transcript, emphasis, emphasis_warnings
+
+
+def main() -> None:
+    a = build_parser().parse_args()
+    apply_common(a)
+    blank_flags_check(a)
+    if a.blank is not None:
+        blank_main(a)
+        return
+    inputs = [Path(i).expanduser() for i in a.input]
+    missing = [str(i) for i in inputs if not i.is_file()]
+    if missing:
+        die(f"input not found: {', '.join(missing)}", "input")
+    src = inputs[0]
+    joined: Path = Path(a.joined).expanduser() if a.joined else default_output(src, "_joined", ".mp4")
+    out = Path(a.output) if a.output else default_output(joined if len(inputs) > 1 else src, ".timeline", ".json")
+    refuse_existing(out)
+    if (a.conformed or a.conform_fps is not None) and not a.conform:
+        die("--conformed / --conform-fps need --conform", "input")
+    if a.conform_fps is not None and not 0 < a.conform_fps <= 240:
+        die(f"--conform-fps must be between 0 and 240, got {a.conform_fps:g}", "input")
+    conformed: Path = (Path(a.conformed).expanduser() if a.conformed
+                       else default_output(joined if len(inputs) > 1 else src, "_conformed", ".mp4"))
+    skill = require_ffmpeg_skill()
+
+    captions, words, transcript, emphasis, emphasis_warnings = read_text_inputs(a)
 
     join_args = [*map(str, inputs), "-o", str(joined), "--transition", a.join_transition,
                  "--duration", str(a.join_duration)] + (["--overwrite"] if STATE.overwrite else [])
