@@ -172,6 +172,8 @@ DETERMINISM = {
         "every built-in composition renders twice to byte-identical files: per-frame md5 of the video, md5 of the "
         "audio and the file's sha256 match (render.py H.264, --fast, --codec prores, --overlay), in two separate runs",
         "--concurrency does not change the output: 1 tab and all cores give the same bytes",
+        "ThreeScene (WebGL through @remotion/three, render.py --gl swangle by default) renders twice to byte-identical "
+        "files, --concurrency 1 included; the scene is a function of the frame and options.seed alone",
         "still.py writes byte-identical PNGs",
         "analyze.py run twice on the same file writes a byte-identical timeline.json; on a copy at another path "
         "only source.path differs",

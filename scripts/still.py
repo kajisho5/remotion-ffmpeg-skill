@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit,
+from _common import (gl_backend, BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit,
                      expected_frames, info, load_look, load_timeline, prepare_props, refuse_existing, remotion_bin,
                      require_project, remotion_error, run, sec_to_frames, shell_join)
 
@@ -64,6 +64,8 @@ def main() -> None:
         refuse_existing(out)
         cmd = [str(remotion_bin(project)), "still", "src/index.ts", a.comp, str(out),
                f"--props={props_path}", f"--frame={f}", "--log=warn"]
+        if gl_backend(a.comp, a.gl):
+            cmd.append(f"--gl={gl_backend(a.comp, a.gl)}")
         commands.append(shell_join(cmd))
         if STATE.dry_run:
             outputs.append(str(out))

@@ -369,7 +369,7 @@ def expected_frames(comp: str, t: Dict[str, Any], options: Optional[Dict[str, An
         if loop:
             return loop[1]
     if comp in ("Captioned", "PeakPulse", "Titled", "BeatMontage", "Karaoke", "Pip", "Emphasis", "KineticType",
-                "Visualizer"):
+                "Visualizer", "ThreeScene"):
         return max(1, sec_to_frames(float(t["source"]["duration"]), fps))
     if comp in ("Jumpcut", "Highlights"):
         if comp == "Jumpcut":
@@ -384,7 +384,7 @@ def expected_frames(comp: str, t: Dict[str, Any], options: Optional[Dict[str, An
 # ---------------------------------------------------------------- Remotion project
 
 BUILTIN_COMPOSITIONS = ("Captioned", "Jumpcut", "PeakPulse", "Titled", "Highlights", "BeatMontage", "Karaoke", "Pip",
-                        "Emphasis", "KineticType", "Visualizer")
+                        "Emphasis", "KineticType", "Visualizer", "ThreeScene")
 
 
 def remotion_bin(project: Path) -> Path:
@@ -587,6 +587,17 @@ def write_props(project: Path, comp: str, timeline: Dict[str, Any], options: Dic
     return path, props
 
 
+# Chromium's OpenGL backends Remotion accepts (--gl). None = Remotion's own default (4.x: none passed, Chrome
+# chooses), as render.py has always rendered the 2D compositions; WebGL compositions get GL_DEFAULTS.
+GL_BACKENDS = ("angle", "egl", "swiftshader", "swangle", "vulkan", "angle-egl")
+GL_DEFAULTS = {"ThreeScene": "swangle"}
+
+
+def gl_backend(comp: str, given: Optional[str]) -> Optional[str]:
+    """The --gl a render or still of this composition passes to Remotion (None: none)."""
+    return given or GL_DEFAULTS.get(comp)
+
+
 def add_frame_args(p: argparse.ArgumentParser) -> None:
     g = p.add_argument_group("output frame and font")
     g.add_argument("--aspect", choices=["source", *ASPECTS], default=None,
@@ -597,6 +608,10 @@ def add_frame_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--font-file", help="caption font file (.ttf/.otf/.ttc/.woff2), staged into the project")
     g.add_argument("--brand", help="ffmpeg-skill brand.json: its colours, caption colour, font and font file set "
                                    "the look (an --options file still wins key by key)")
+    g.add_argument("--gl", choices=GL_BACKENDS,
+                   help="Chromium's OpenGL backend for Remotion (default: swangle -- software WebGL, works without a "
+                        "GPU -- for ThreeScene, none for the other compositions: Chrome's choice; angle uses a GPU). "
+                        "Another backend changes the pixels; doctor.py names the one in use")
     g.add_argument("--no-auto-font", action="store_true",
                    help="don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions")
 
@@ -712,6 +727,7 @@ _OPTION_TYPES: Dict[str, Any] = {
     "emphasisStyle": str, "bubbles": list, "comments": list, "background": str,
     "kineticStyle": str, "kineticReveal": str, "kineticStagger": (int, float), "kineticSize": (int, float),
     "visualizer": str, "visualizerBars": int, "loopBars": (int, type(None)), "beatsPerBar": int,
+    "seed": int, "threeParticles": int,
 }
 
 
@@ -763,6 +779,11 @@ def validate_options(o: Dict[str, Any]) -> List[str]:
         p.append("loopBars must be 0 (as many whole bars as measured), a number of bars, or null")
     if isinstance(o.get("beatsPerBar"), int) and not isinstance(o["beatsPerBar"], bool) and not 1 <= o["beatsPerBar"] <= 16:
         p.append("beatsPerBar must be between 1 and 16")
+    if isinstance(o.get("seed"), int) and not isinstance(o["seed"], bool) and not 0 <= o["seed"] <= 2 ** 32 - 1:
+        p.append("seed must be a whole number from 0 to 4294967295")
+    if isinstance(o.get("threeParticles"), int) and not isinstance(o["threeParticles"], bool) \
+            and not 1 <= o["threeParticles"] <= 5000:
+        p.append("threeParticles must be between 1 and 5000")
     if "emphasisStyle" in o and o["emphasisStyle"] not in ("pop", "color", "box"):
         p.append("emphasisStyle must be pop, color or box")
     for key, extra in (("bubbles", "side"), ("comments", "author")):

@@ -11,6 +11,7 @@ import { Pip } from "./compositions/Pip";
 import { Emphasis } from "./compositions/Emphasis";
 import { KineticType } from "./compositions/KineticType";
 import { Visualizer } from "./compositions/Visualizer";
+import { ThreeScene } from "./compositions/ThreeScene";
 import {
   SAMPLE_TIMELINE,
   fullLengthFrames,
@@ -55,5 +56,6 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="Emphasis" component={Emphasis} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="KineticType" component={KineticType} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="Visualizer" component={Visualizer} {...base} calculateMetadata={visualizerMetadata} />
+    <Composition id="ThreeScene" component={ThreeScene} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
   </>
 );
