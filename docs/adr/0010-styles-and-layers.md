@@ -24,7 +24,7 @@ A caller wants to set a tone in one word. An editor wants to rebuild the graphic
 
 ## Consequences
 
-- The contract changes additively. render, still and pipeline gain `style`. render gains `layers` (`layers` in its result and dry-run plan; `writes` names the files). The options gain `captionBox`, and the props gain `layer`.
+- The contract changes additively. render, still and pipeline gain `style`. render gains `layers` (`layers` in its result and dry-run plan; its `writes` string is unchanged). The options gain `captionBox`, and the props gain `layer`.
 - Measured (`test_integration.StylesAndLayers`, 640x360 blank, 8 s):
   - Each of the six styles renders a still, and the six stills all differ.
   - Emphasis with captions, a bubble and a comment wrote three layers. Stacked over the background in order, they match the composite at 53.5 dB or better on every frame (58.8 dB on average). The stated bound is 45 dB.
