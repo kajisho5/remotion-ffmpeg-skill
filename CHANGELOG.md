@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.0 — 2026-11-27
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- source-less runs (analyze / pipeline --blank) (#34)
+
+
 ## 0.14.5 — 2026-11-24
 
 _Automated release: version and notes from what was merged since the previous tag._
