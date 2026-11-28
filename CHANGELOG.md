@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0 — 2026-11-28
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- Visualizer composition (bars, spectrum, radial, waveform) and whole-bar loops (#36)
+
+
 ## 0.16.0 — 2026-11-27
 
 _Automated release: version and notes from what was merged since the previous tag._
