@@ -10,7 +10,18 @@ import { Karaoke } from "./compositions/Karaoke";
 import { Pip } from "./compositions/Pip";
 import { Emphasis } from "./compositions/Emphasis";
 import { KineticType } from "./compositions/KineticType";
-import { SAMPLE_TIMELINE, fullLengthFrames, highlightFrames, jumpcutFrames, outputFrame, type Props, type Timeline } from "./timeline";
+import { Visualizer } from "./compositions/Visualizer";
+import {
+  SAMPLE_TIMELINE,
+  fullLengthFrames,
+  highlightFrames,
+  jumpcutFrames,
+  outputFrame,
+  resolveOptions,
+  visualizerRange,
+  type Props,
+  type Timeline,
+} from "./timeline";
 
 // Length and fps come from the measured timeline, never from constants; the frame is the
 // source's probed size unless render.py was given another shape (--aspect).
@@ -20,6 +31,13 @@ const metadataFrom =
     const f = outputFrame(props);
     return { durationInFrames: frames(props.timeline), fps: props.timeline.source.fps, width: f.width, height: f.height };
   };
+
+// The Visualizer's length also depends on its options: a loop is a whole number of measured bars.
+const visualizerMetadata: CalculateMetadataFunction<Props> = ({ props }) => {
+  const f = outputFrame(props);
+  const [, frames] = visualizerRange(props.timeline, resolveOptions(props.options));
+  return { durationInFrames: frames, fps: props.timeline.source.fps, width: f.width, height: f.height };
+};
 
 const defaultProps: Props = { timeline: SAMPLE_TIMELINE, options: {}, frame: null, font: null };
 const base = { durationInFrames: 240, fps: 30, width: 1280, height: 720, defaultProps };
@@ -36,5 +54,6 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="Pip" component={Pip} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="Emphasis" component={Emphasis} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
     <Composition id="KineticType" component={KineticType} {...base} calculateMetadata={metadataFrom(fullLengthFrames)} />
+    <Composition id="Visualizer" component={Visualizer} {...base} calculateMetadata={visualizerMetadata} />
   </>
 );

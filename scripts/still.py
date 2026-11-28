@@ -43,7 +43,7 @@ def main() -> None:
     fps = float(timeline["source"]["fps"])
 
     frames: List[int] = list(a.frame) + [sec_to_frames(t, fps) for t in a.at]
-    total = expected_frames(a.comp, timeline)
+    total = expected_frames(a.comp, timeline, options)
     if not frames:
         if total is None:
             die("custom composition: pass --frame or --at", "input")

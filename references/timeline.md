@@ -52,6 +52,7 @@ composition exactly.
 | `Emphasis` | source duration | YouTube-style captions: each cue as written; its `emphasis` words pop, take the accent colour or get an accent box from the time they are spoken to the end of the cue; speech bubbles (`bubbles`) and comment-style cards (`comments`) with the user's text at their own times |
 | `Pip` | source duration | the source with `pip` (a camera) in a corner while the camera has pictures, synced by `pip.offset`; captions on top as in Captioned |
 | `KineticType` | source duration | the `kinetic` schedule: each line centred, its units (words, or CJK characters) entering at their measured starts -- invisible before that frame, visible on it, never reflowing the line; `kineticStyle` pop, wipe, tracking or rise; `kineticReveal: "char"` lets a unit's characters follow each other `kineticStagger` s apart. The current unit takes the accent colour. Needs `analyze.py --kinetic` |
+| `Visualizer` | source duration, or with `loopBars` a whole number of measured bars | the source's audio drawn each frame (`visualizer`: `bars`, `spectrum`, `radial` or `waveform`; @remotion/media-utils, a 1024-sample FFT centred on the frame's time, no smoothing across frames), a ring that hits on every measured beat, and the caption cues as Karaoke draws them (lyrics with `--words`). Over the source's picture, or over `background` on a `--blank` run. `loopBars`: a loop of that many bars of `beatsPerBar` measured beats (0 = as many as the beats hold) whose seam falls halfway between two beats -- from halfway between beats 0 and 1 to halfway between beats k and k+1 -- so its last frame runs into its first; refused when the beats cannot hold it |
 | `BeatMontage` | source duration | audio unbroken; the picture cuts every `beatsPerCut` measured beats, cycling through highlights (or scenes); no usable grid → cuts on scene changes |
 
 ## Options (`--options look.json`)
@@ -85,6 +86,10 @@ Every key is optional.
 | `kineticReveal` | `"char"` | KineticType: `char` (characters one after another from the unit's start) or `unit` (the whole unit at its start) |
 | `kineticStagger` | `0.04` | KineticType: seconds between characters with `kineticReveal: "char"`, 0–1 |
 | `kineticSize` | `0.09` | KineticType: text size as a fraction of the frame's short side, 0.01–0.5 |
+| `visualizer` | `"bars"` | Visualizer: `bars`, `spectrum`, `radial` or `waveform` |
+| `visualizerBars` | `48` | Visualizer: bars (or points) drawn, 8–256 |
+| `loopBars` | `null` | Visualizer: `null` = the whole source; `0` = a loop of as many whole measured bars as fit; `N` = N bars (needs `analyze.py --beats`) |
+| `beatsPerBar` | `4` | Visualizer: measured beats per bar for `loopBars`, 1–16 |
 | `chapterSeconds` | `4` | Titled: how long a chapter card stays up (cut short by the next chapter; 0 = none) |
 
 Unknown keys and wrong types are refused by render.py / still.py before anything renders.

@@ -35,6 +35,11 @@ jobs:
           repository: kajisho5/ffmpeg-skill
           ref: ${{ matrix.ffmpeg_skill.ref }}
           path: _ffmpeg-skill
+      # qc-skill (no dependencies) for the Visualizer loop's seam check (video.loop_seam, its ADR-026)
+      - uses: actions/checkout@v7
+        with:
+          repository: kajisho5/qc-skill
+          path: _qc-skill
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -71,5 +76,6 @@ jobs:
         env:
           FFMPEG_SKILL_DIR: ${{ github.workspace }}/_ffmpeg-skill
           RFS_PROJECT: ${{ runner.temp }}/rfs-project
+          QC_SKILL_DIR: ${{ github.workspace }}/_qc-skill
           PYTHONUTF8: "1"
         run: python -m unittest tests.test_integration -v

@@ -164,6 +164,15 @@ export type Options = {
   kineticStagger: number;
   /** KineticType: text size as a fraction of the frame's short side. */
   kineticSize: number;
+  /** Visualizer: what is drawn from the audio each frame. */
+  visualizer: "bars" | "spectrum" | "radial" | "waveform";
+  /** Visualizer: number of bars (or points) drawn, 8..256. */
+  visualizerBars: number;
+  /** Visualizer: null = the whole source; 0 = a loop of as many whole bars as the measured beats hold; N = N bars.
+   * A loop starts on the first measured beat and ends on the beat N * beatsPerBar after it. */
+  loopBars: number | null;
+  /** Visualizer: measured beats per bar (4 for 4/4). */
+  beatsPerBar: number;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -193,6 +202,10 @@ export const DEFAULT_OPTIONS: Options = {
   kineticReveal: "char",
   kineticStagger: 0.04,
   kineticSize: 0.09,
+  visualizer: "bars",
+  visualizerBars: 48,
+  loopBars: null,
+  beatsPerBar: 4,
 };
 
 /** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */
@@ -302,6 +315,27 @@ export const highlightFrames = (t: Timeline): number => {
     0,
   );
   return Math.max(1, total);
+};
+
+/**
+ * The Visualizer's range on the source, in frames: [first frame, length]. Without loopBars, the whole source.
+ * With it, a loop of loopBars * beatsPerBar measured beats (0 = as many whole bars as the beats hold). Its seam
+ * falls halfway between two measured beats, where beat-driven motion is quietest: it starts halfway between the
+ * first and second beats and ends halfway between beat k and beat k + 1 (k = bars * beatsPerBar), so the last
+ * frame runs into the first. loop_range() in scripts/_common.py mirrors this; render.py refuses a loop the
+ * beats cannot hold before rendering.
+ */
+export const visualizerRange = (t: Timeline, o: Options): [number, number] => {
+  const fps = t.source.fps;
+  if (o.loopBars === null || o.loopBars === undefined) return [0, fullLengthFrames(t)];
+  const beats = beatTimes(t).filter((b) => b < t.source.duration);
+  const per = Math.max(1, Math.round(o.beatsPerBar));
+  const most = Math.floor((beats.length - 2) / per);
+  const bars = o.loopBars === 0 ? most : Math.min(o.loopBars, most);
+  if (bars < 1) return [0, fullLengthFrames(t)];
+  const k = bars * per;
+  const start = secToFrames((beats[0] + beats[1]) / 2, fps);
+  return [start, Math.max(1, secToFrames((beats[k] + beats[k + 1]) / 2, fps) - start)];
 };
 
 /** Usable measured beat times (empty when the grid was not measured or not confident). */
