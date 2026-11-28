@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.0 — 2026-11-28
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- ThreeScene composition (Three.js) and the GL backend in render, still and doctor (#37)
+
+
 ## 0.17.0 — 2026-11-28
 
 _Automated release: version and notes from what was merged since the previous tag._
