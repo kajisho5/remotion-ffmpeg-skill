@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (ASPECTS, BUILTIN_COMPOSITIONS, FITS, HERE, STATE, add_common, apply_common, die, emit, info,
-                     platform_aspect, shell_join, parse_with_blank)
+                     platform_aspect, shell_join, parse_with_blank, STYLE_NAMES)
 from deliver import PLATFORMS
 
 
@@ -35,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "markers in the deliverable")
     p.add_argument("--options", help="JSON options file passed to the composition")
     p.add_argument("--brand", help="ffmpeg-skill brand.json: the look of the graphics and, on delivery, the logo")
+    p.add_argument("--style", choices=STYLE_NAMES,
+                   help="a look in one word (render.py --style): --brand and --options win over it key by key")
     p.add_argument("--platform", choices=PLATFORMS, help="deliver with this ffmpeg-skill template and check it")
     p.add_argument("--out-dir", help="where the timeline, render and deliverable go (default: next to the input)")
     p.add_argument("--beats", action="store_true", help="measure the beat grid too")
@@ -132,7 +134,8 @@ def main() -> None:
     aspect = a.aspect or platform_aspect(a.platform)
     if aspect:
         r_args += ["--aspect", aspect]
-    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file), ("--brand", a.brand)):
+    for flag, val in (("--width", a.width), ("--fit", a.fit), ("--font-file", a.font_file), ("--brand", a.brand),
+                      ("--style", a.style)):
         if val is not None:
             r_args += [flag, str(val)]
     rendered = step("draw", "render", r_args, steps)

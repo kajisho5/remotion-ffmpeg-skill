@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { SourceVideo } from "../lib/SourceVideo";
 import { useStagedFont } from "../lib/useStagedFont";
-import { Props, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
+import { Props, showLayer, fontStack, outputFrame, resolveOptions, secToFrames, type Options } from "../timeline";
 
 /**
  * Captioned: the source, full length, with each measured caption cue popping in on its own
@@ -17,7 +17,7 @@ export const Captioned: React.FC<Props> = (props) => {
   return (
     <AbsoluteFill style={{ backgroundColor: overlay ? "transparent" : "black" }}>
       {overlay ? null : <SourceVideo background={o.background} source={timeline.source} fit={outputFrame(props).fit} />}
-      {timeline.captions.map((c, i) => {
+      {(showLayer(props, "captions") ? timeline.captions : []).map((c, i) => {
         const from = secToFrames(c.start, fps);
         const dur = Math.max(1, secToFrames(c.end, fps) - from);
         return (
@@ -70,7 +70,7 @@ export const CaptionCard: React.FC<{ text: string; durationInFrames: number; o: 
           maxWidth: width * 0.86,
           padding: `${size * 0.28}px ${size * 0.6}px`,
           borderRadius: size * 0.35,
-          background: "rgba(0,0,0,0.62)",
+          background: o.captionBox ?? "rgba(0,0,0,0.62)",
           borderBottom: `${Math.max(2, Math.round(size * 0.08))}px solid ${o.accent}`,
           color: o.textColor,
           fontFamily,

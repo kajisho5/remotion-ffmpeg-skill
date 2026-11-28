@@ -135,10 +135,12 @@ OUTPUTS: Dict[str, Dict[str, Dict[str, str]]] = {
                    "summary": "str", "frame": "object|null", "font": "str|null", "mode": "full|overlay",
                    "graphics": "str|null (kept ProRes 4444 layer)",
                    "sparse": "null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)",
+                   "layers": "null|{manifest, files} (--layers: the layers@1 manifest and the ProRes 4444 files)",
                    "kind": "null|failed",
                    "error": "null|str (which verification rows failed)"},
         "dry_run": {"commands": "list[str]", "props": "str", "expected_frames": "int|null", "frame": "object|null",
-                    "font": "str|null", "sparse": "null|object (--sparse)"},
+                    "font": "str|null", "sparse": "null|object (--sparse)",
+                    "layers": "null|list[str] (--layers: the groups that would be written)"},
     },
     "deliver": {
         "result": {"checked": "str", "platform": "str|null", "verified": "bool",

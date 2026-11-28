@@ -839,6 +839,86 @@ class ThreeScene(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class StylesAndLayers(unittest.TestCase):
+    """--style presets render; --layers files composite back to the full render."""
+
+    CUES = ("1\n00:00:00,300 --> 00:00:02,800\nPlaceholder caption one.\n\n"
+            "2\n00:00:05,200 --> 00:00:07,600\nPlaceholder caption two.\n")
+    LAYERS_MIN_PSNR = 40.0     # dB, every frame: the layers over the base against the composite (CI Linux: 43.2)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-look-")
+        (cls.tmp / "cues.srt").write_text(cls.CUES, encoding="utf-8")
+        cls.tl = cls.tmp / "blank.timeline.json"
+        code, res = script("analyze", "--blank", "8", "--size", "640x360", "--captions", cls.tmp / "cues.srt",
+                           "-o", cls.tl)
+        assert code == 0, res
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_layers_are_planned_or_refused(self):
+        proj = self.tmp / "proj"
+        script("init", proj)
+        code, res = script("render", "--project", proj, "--comp", "Emphasis", "--timeline", self.tl, "--layers",
+                           "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertEqual(res["layers"], ["captions", "bubbles", "comments"])
+        for comp, extra in (("Jumpcut", []), ("Captioned", ["--fast"])):
+            code, res = script("render", "--project", proj, "--comp", comp, "--timeline", self.tl, "--layers",
+                               "--dry-run", *extra)
+            self.assertEqual((code, res.get("kind")), (2, "input"), res)
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_each_style_renders_a_still(self):
+        shots = {}
+        for style in _common.STYLE_NAMES:
+            with self.subTest(style=style):
+                code, res = script("still", "--project", PROJECT, "--comp", "Captioned", "--timeline", self.tl,
+                                   "--style", style, "--at", "1.5", "--out-dir", self.tmp / f"style_{style}")
+                self.assertEqual(code, 0, res)
+                shots[style] = sha256(Path(res["outputs"][0]))
+        self.assertEqual(len(set(shots.values())), len(shots), "two styles drew the same picture")
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_layers_composite_back_to_the_render(self):
+        opts = self.tmp / "emph.json"
+        opts.write_text(json.dumps({"background": "#203040",
+                                    "bubbles": [{"text": "Hello there", "start": 1, "end": 3}],
+                                    "comments": [{"text": "Nice one", "author": "viewer", "start": 4, "end": 6}]}),
+                        encoding="utf-8")
+        out = self.tmp / "layered.mp4"
+        code, res = script("render", "--project", PROJECT, "--comp", "Emphasis", "--timeline", self.tl,
+                           "--options", opts, "-o", out, "--layers", "--no-look")
+        self.assertEqual(code, 0, res)
+        self.assertTrue(res["verified"])
+        self.assertEqual(_contract.missing_output_keys("render", res), [])
+        m = json.loads(Path(res["layers"]["manifest"]).read_text(encoding="utf-8"))
+        self.assertEqual(m["schema"], "remotion-ffmpeg-skill/layers@1")
+        self.assertEqual([x["group"] for x in m["layers"]], ["captions", "bubbles", "comments"])
+        self.assertEqual(m["layers"][1]["times"], [{"start": 1.0, "end": 3.0, "from_frame": 30, "end_frame": 90}])
+        self.assertEqual(m["base"]["background"], "#203040")
+        files = [x["file"] for x in m["layers"]]
+        inputs = ["-f", "lavfi", "-i", f"color=c=0x203040:s={m['width']}x{m['height']}:r={m['fps']:g}:d={m['duration']}"]
+        for f in files:
+            inputs += ["-i", f]
+        chain, last = [], "0:v"
+        for i in range(1, len(files) + 1):
+            chain.append(f"[{last}][{i}:v]overlay=format=auto[l{i}]")
+            last = f"l{i}"
+        n = len(files) + 1
+        chain.append(f"[{last}]format=yuv420p,settb=1/90000[mine];[{n}:v]settb=1/90000[ref];[mine][ref]psnr=stats_file=ps.txt")
+        subprocess.run(["ffmpeg", "-v", "error", *inputs, "-i", str(out), "-filter_complex", ";".join(chain),
+                        "-f", "null", "-"], check=True, cwd=self.tmp)
+        rows = [r for r in (self.tmp / "ps.txt").read_text().splitlines() if "psnr_avg" in r]
+        self.assertEqual(len(rows), m["frames"])
+        worst = min(float("inf") if "psnr_avg:inf" in r else float(r.split("psnr_avg:")[1].split()[0]) for r in rows)
+        self.assertGreaterEqual(worst, self.LAYERS_MIN_PSNR)
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
 class NtscRate(unittest.TestCase):
     """velisa/timebase@1 (docs/adr/0004): a 30000/1001 source is drawn at 30000/1001, not at the probe's 29.97."""
 

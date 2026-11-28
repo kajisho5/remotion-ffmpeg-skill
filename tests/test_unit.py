@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import _captions  # noqa: E402
 import _kinetic  # noqa: E402
+import _looks  # noqa: E402
 import _common  # noqa: E402
 import _sparse  # noqa: E402
 import analyze  # noqa: E402
@@ -150,6 +151,38 @@ class VisualizerLoop(unittest.TestCase):
                                                    "beatsPerBar": 3}), [])
         for bad in ({"visualizer": "dots"}, {"visualizerBars": 4}, {"loopBars": -1}, {"beatsPerBar": 0}):
             self.assertTrue(_common.validate_options(bad), bad)
+
+
+class StylesAndLayers(unittest.TestCase):
+    def test_styles_are_valid_option_bundles(self):
+        self.assertEqual(tuple(_looks.STYLES), _common.STYLE_NAMES)
+        for name, opts in _looks.STYLES.items():
+            with self.subTest(style=name):
+                self.assertEqual(_common.validate_options(opts), [])
+
+    def test_brand_wins_over_the_style_and_options_over_both(self):
+        d = tmp_dir(self, "rfs-style-")
+        brand = d / "brand.json"
+        brand.write_text('{"colors": {"primary": "#123456"}}', encoding="utf-8")
+        opts = d / "o.json"
+        opts.write_text('{"captionSize": 0.07}', encoding="utf-8")
+        a = argparse.Namespace(options=str(opts), style="swiss", brand=str(brand), font_file=None)
+        look = _common.load_look(a)
+        self.assertEqual(look["accent"], "#123456")                    # brand over style
+        self.assertEqual(look["captionSize"], 0.07)                    # options over style
+        self.assertEqual(look["background"], _looks.STYLES["swiss"]["background"])   # style where nothing else says
+
+    def test_layer_groups_match_the_compositions(self):
+        comps = ROOT / "templates" / "remotion-project" / "src" / "compositions"
+        for comp, groups in _looks.LAYER_GROUPS.items():
+            src = (comps / f"{comp}.tsx").read_text(encoding="utf-8")
+            for g in groups:
+                self.assertIn(f'showLayer(props, "{g}")', src, (comp, g))
+        t = timeline(captions=[{"start": 0.3, "end": 2.8, "text": "a"}, {"start": 2.8, "end": 4.0, "text": "b"}])
+        self.assertEqual(_looks.group_intervals("Captioned", "captions", t), [(9, 120)])
+        self.assertEqual(_looks.group_intervals("Titled", "lowerThirds", t,
+                                                {"lowerThirds": [{"text": "N", "start": 1, "end": 2}]}), [(30, 60)])
+        self.assertEqual(_looks.group_intervals("Titled", "chapters", t), [])
 
 
 class Captions(unittest.TestCase):

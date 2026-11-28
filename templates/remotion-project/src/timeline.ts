@@ -173,6 +173,8 @@ export type Options = {
   loopBars: number | null;
   /** Visualizer: measured beats per bar (4 for 4/4). */
   beatsPerBar: number;
+  /** Captioned / Karaoke / Emphasis: the caption box colour (CSS); null = the dark box each draws by default. */
+  captionBox: string | null;
   /** ThreeScene: the seed that places the particles (same seed, same scene). */
   seed: number;
   /** ThreeScene: number of particles, 1..5000. */
@@ -210,6 +212,7 @@ export const DEFAULT_OPTIONS: Options = {
   visualizerBars: 48,
   loopBars: null,
   beatsPerBar: 4,
+  captionBox: null,
   seed: 1,
   threeParticles: 300,
 };
@@ -249,7 +252,15 @@ export type Props = {
    * ffmpeg-skill composites the result over it afterwards -- much faster on long footage.
    */
   overlay?: boolean;
+  /**
+   * One graphic group only (render.py --layers): the composition draws just this group, e.g. "captions" or
+   * "lowerThirds", so each group becomes its own transparent layer. null / absent = every group.
+   */
+  layer?: string | null;
 };
+
+/** Whether this group is drawn (every group unless render.py --layers asked for one). */
+export const showLayer = (p: Props, group: string): boolean => !p.layer || p.layer === group;
 
 export const resolveOptions = (o?: Partial<Options>): Options => ({ ...DEFAULT_OPTIONS, ...(o ?? {}) });
 

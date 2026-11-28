@@ -16,9 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _sparse
-from _common import (gl_backend, loop_range, BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
-                     ffskill, ffskill_cmd, frame_size, info, load_look, load_timeline, prepare_props, refuse_existing,
-                     remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
+from _looks import LAYER_GROUPS, group_intervals
+from _common import (BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
+                     ffskill, ffskill_cmd, frame_size, gl_backend, info, load_look, load_timeline, loop_range,
+                     prepare_props, refuse_existing, remotion_bin, remotion_error, require_ffmpeg_skill,
+                     require_project, resolve_font, run, shell_join, write_props)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
                         "untouched source with ffmpeg-skill overlay.py (Captioned / PeakPulse, source frame only); "
                         "with --keep-graphics the layer is kept for an editing app (Premiere, Resolve, Final Cut)")
     p.add_argument("--keep-graphics", action="store_true", help="with --overlay: keep the transparent graphics .mov")
+    p.add_argument("--layers", action="store_true",
+                   help="also write each graphic group (captions, lower thirds, bubbles, ...) as its own transparent "
+                        "ProRes 4444 .mov, full frame, in <output>.layers/, with a manifest <output>.layers.json "
+                        "(the times each shows, its position and stacking order) beside the composite, for After "
+                        "Effects or an NLE (Captioned, Karaoke, Titled, Emphasis, KineticType)")
     p.add_argument("--sparse", action="store_true",
                    help="overlay mode that draws only the frames where something shows (Captioned / Karaoke / "
                         "Titled) and "
@@ -186,6 +193,74 @@ def sparse_plan(timeline: Dict[str, Any], options: Dict[str, Any], a: argparse.N
     return plan
 
 
+LAYERS_SCHEMA = "remotion-ffmpeg-skill/layers@1"
+
+
+def render_layers(project: Path, timeline: Dict[str, Any], options: Dict[str, Any], frame: Optional[Dict[str, Any]],
+                  a: argparse.Namespace, composite: Path, commands: List[str]) -> Dict[str, Any]:
+    """--layers: each graphic group of the composition drawn alone on a transparent full frame (ProRes 4444), checked
+    with ffmpeg-skill probe (frame count, size, an alpha pixel format), and a manifest beside the composite. A group
+    that shows nothing in this timeline gets no file (listed with its reason)."""
+    import json
+    fps = float(timeline["source"]["fps"])
+    total = expected_frames(a.comp, timeline, options) or 1
+    fw, fh = frame_size(timeline, frame)
+    folder = composite.with_name(composite.stem + ".layers")
+    manifest_path = composite.with_name(composite.stem + ".layers.json")
+    refuse_existing(manifest_path)
+    folder.mkdir(parents=True, exist_ok=True)
+    font, _ = resolve_font(project, timeline, a.font_file, not a.no_auto_font)
+    layer_args = argparse.Namespace(**{**vars(a), "overlay": True})
+    entries: List[Dict[str, Any]] = []
+    for order, group in enumerate(LAYER_GROUPS[a.comp]):
+        spans = group_intervals(a.comp, group, timeline, options)
+        entry: Dict[str, Any] = {"group": group, "order": order, "file": None,
+                                 "position": {"x": 0, "y": 0, "width": fw, "height": fh},
+                                 "times": [{"start": round(s / fps, 3), "end": round(e / fps, 3),
+                                            "from_frame": s, "end_frame": e} for s, e in spans]}
+        if not spans:
+            entry["skipped"] = "nothing of this group shows in this timeline"
+            entries.append(entry)
+            continue
+        out = folder / f"{order:02d}_{group}.mov"
+        refuse_existing(out)
+        props, _ = write_props(project, a.comp, timeline, options, frame, font, overlay=True, layer=group)
+        cmd = remotion_render_cmd(project, a.comp, out, props, layer_args)
+        info(f"rendering layer {group} -> {out}")
+        proc = run(cmd, cwd=project)
+        if proc.returncode != 0 or not out.is_file():
+            tail = remotion_error((proc.stderr or "") + "\n" + (proc.stdout or ""))
+            die(f"Remotion render of layer {group} failed (exit {proc.returncode}):\n{tail}", "failed",
+                command=shell_join(cmd))
+        commands.append(shell_join(cmd))
+        pr = ffskill("probe", [str(out)])
+        commands.append(pr["_command"])
+        lv = pr.get("video") or {}
+        problems = []
+        if lv.get("nb_frames") not in (None, total):
+            problems.append(f"{lv.get('nb_frames')} frames, the composite has {total}")
+        if (lv.get("width"), lv.get("height")) != (fw, fh):
+            problems.append(f"{lv.get('width')}x{lv.get('height')}, the composite is {fw}x{fh}")
+        if "a" not in str(lv.get("pix_fmt") or ""):
+            problems.append(f"pixel format {lv.get('pix_fmt')} has no alpha")
+        if problems:
+            die(f"layer {group} ({out.name}) does not match the composite: {'; '.join(problems)}", "failed")
+        entry.update(file=str(out), codec="prores 4444", pix_fmt=lv.get("pix_fmt"), frames=total)
+        entries.append(entry)
+    src = timeline["source"]
+    manifest = {
+        "schema": LAYERS_SCHEMA, "composition": a.comp, "composite": str(composite), "fps": fps,
+        "width": fw, "height": fh, "frames": total, "duration": round(total / fps, 3),
+        # what the layers go over, bottom first: the source picture (or the blank's background), then each layer
+        "base": {"source": src.get("path") if src.get("has_video") else None,
+                 "background": options.get("background", "#000000") if src.get("blank") or not src.get("has_video")
+                 else None, "fit": (frame or {}).get("fit", "contain")},
+        "layers": entries,
+    }
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"manifest": str(manifest_path), "files": [e["file"] for e in entries if e["file"]]}
+
+
 def main() -> None:
     a = build_parser().parse_args()
     apply_common(a)
@@ -233,6 +308,13 @@ def main() -> None:
         if not timeline["source"].get("has_video"):
             die("--overlay needs a video source to composite onto", "input")
 
+    if a.layers:
+        if a.comp not in LAYER_GROUPS:
+            die(f"--layers splits the graphic groups of {', '.join(LAYER_GROUPS)}; {a.comp} has none of its own",
+                "input")
+        if a.overlay or a.fast or frames:
+            die("--layers writes the full composite and full-size layers: drop --overlay / --sparse / --fast / "
+                "--frames", "input")
     sparse = sparse_plan(timeline, options, a) if a.sparse else None
     used = bool(sparse and sparse["used"])
     props_path, frame, font_note = prepare_props(project, a.comp, sparse["timeline"] if used else timeline,
@@ -251,7 +333,8 @@ def main() -> None:
         plan = [shell_join(cmd)] + ([shell_join(ffskill_cmd("overlay", ov_args))] if a.overlay else [])
         emit({"output": str(output), "commands": plan, "props": str(props_path),
               "expected_frames": (frames[1] - frames[0] + 1) if frames else expected_frames(a.comp, timeline, options),
-              "frame": frame, "font": font_note, "sparse": sparse_note},
+              "frame": frame, "font": font_note, "sparse": sparse_note,
+              "layers": [g for g in LAYER_GROUPS[a.comp]] if a.layers else None},
              f"would render {a.comp} -> {output}")
         return
 
@@ -296,6 +379,7 @@ def main() -> None:
                 look_error += (" -- this FFmpeg build has no drawtext filter. macOS Homebrew: `brew install ffmpeg-full` "
                                "(the plain ffmpeg formula dropped it); use still.py frames to look meanwhile")
             info(f"warning: contact sheet failed ({look_error}); view the render itself")
+    layers = render_layers(project, timeline, options, frame, a, output, commands) if a.layers and ok else None
     v = probe.get("video") or {}
     summary = (f"{output.name}: {float(probe.get('duration') or 0):.2f} s, {v.get('width')}x{v.get('height')}, "
                f"{v.get('fps')} fps, {'audio' if probe.get('audio') else 'no audio'}")
@@ -303,6 +387,7 @@ def main() -> None:
               "verification": rows, "commands": commands, "look": look, "summary": summary,
               "frame": frame, "font": font_note, "mode": "overlay" if a.overlay else "full", "look_error": look_error,
               "graphics": str(graphics) if a.overlay and a.keep_graphics else None, "sparse": sparse_note,
+              "layers": layers,
               "kind": None if ok else "failed",
               "error": None if ok else "verification failed: " + ", ".join(r["check"] for r in rows if r["status"] == "FAIL")}
     table = "\n".join(f"  {r['check']:<9} {r['status']:<4}  {r['value']} (expected {r['expected']})" for r in rows)
