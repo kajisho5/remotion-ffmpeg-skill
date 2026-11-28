@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0 — 2026-11-28
+
+_Automated release: version and notes from what was merged since the previous tag._
+
+### Added
+
+- style presets (--style) and per-group layers (render.py --layers) (#38)
+
+
 ## 0.18.0 — 2026-11-28
 
 _Automated release: version and notes from what was merged since the previous tag._
