@@ -16,7 +16,23 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import add_common, apply_common, emit, ffmpeg_skill_version, find_ffmpeg_skill, remotion_bin, version
+import re
+
+from _common import (GL_DEFAULTS, add_common, apply_common, emit, ffmpeg_skill_version, find_ffmpeg_skill, remotion_bin,
+                     version)
+
+
+def project_gl(proj: Path) -> str:
+    """The GL backend renders in this project use, as doctor reports it: the remotion.config.ts override when
+    there is one (Config.setChromiumOpenGlRenderer), else render.py's --gl defaults."""
+    cfg = proj / "remotion.config.ts"
+    text = cfg.read_text(encoding="utf-8") if cfg.is_file() else ""
+    text = re.sub(r"//[^\n]*", "", text)
+    m = re.search(r"setChromiumOpenGlRenderer\(\s*['\"]([\w-]+)['\"]", text)
+    if m:
+        return f"{m.group(1)} (remotion.config.ts, every composition unless --gl is given)"
+    three = ", ".join(f"{c}: {b}" for c, b in GL_DEFAULTS.items())
+    return f"{three}; other compositions: none set (Chrome's choice); --gl overrides"
 
 
 def _version(cmd):
@@ -71,6 +87,7 @@ def main() -> None:
             rv = json.loads(pkg.read_text(encoding="utf-8")).get("version")
         row("remotion project", rb.exists(), f"{proj} (remotion {rv})" if rv else str(proj),
             f"cd {proj} && npm install")
+        row("gl backend", True, project_gl(proj))
 
     ok = all(r["ok"] for r in rows)
     lines = [f"{'ok ' if r['ok'] else 'NO '} {r['check']}: {r['value']}" + (f"  -> {r['fix']}" if r["fix"] else "")

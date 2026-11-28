@@ -89,7 +89,7 @@ Render single frames as PNG to check the look before a full render.
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, ThreeScene, or yours) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options |
 | `--at` | number, repeatable |  | time in seconds (repeatable) |
@@ -100,6 +100,7 @@ Render single frames as PNG to check the look before a full render.
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
 | `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
+| `--gl` | string: angle / egl / swiftshader / swangle / vulkan / angle-egl |  | Chromium's OpenGL backend for Remotion (default: swangle -- software WebGL, works without a GPU -- for ThreeScene, none for the other compositions: Chrome's choice; angle uses a GPU). Another backend changes the pixels; doctor.py names the one in use |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
 --json result (besides `status`, `dry_run`, `output`): `outputs` (list[str] (PNG paths)), `frames` (list[int]), `commands` (list[str]), `verified` (bool), `frame` (object|null {width, height, fit}), `font` (str|null)
@@ -120,7 +121,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, or one you added) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, ThreeScene, or one you added) |
 | `--timeline (required)` | string |  | timeline.json written by analyze.py |
 | `--options` | string |  | JSON object of look-and-feel options (see references/timeline.md) |
 | `--output` | string |  | output file (default: <source>_<comp>.mp4, .mov for prores) |
@@ -139,6 +140,7 @@ Render a composition from a timeline, verify it (frames, fps, size, audio) and w
 | `--fit` | string: blur / contain / cover |  | how the source fills another shape: blur (default when the shape changes), contain (bars) or cover (crop) |
 | `--font-file` | string |  | caption font file (.ttf/.otf/.ttc/.woff2), staged into the project |
 | `--brand` | string |  | ffmpeg-skill brand.json: its colours, caption colour, font and font file set the look (an --options file still wins key by key) |
+| `--gl` | string: angle / egl / swiftshader / swangle / vulkan / angle-egl |  | Chromium's OpenGL backend for Remotion (default: swangle -- software WebGL, works without a GPU -- for ThreeScene, none for the other compositions: Chrome's choice; angle uses a GPU). Another backend changes the pixels; doctor.py names the one in use |
 | `--no-auto-font` | boolean |  | don't stage the CJK font ffmpeg-skill finds for Japanese/Chinese/Korean captions |
 
 --json result (besides `status`, `dry_run`, `output`): `verified` (bool), `verification` (list[{check, status, value, expected}]), `commands` (list[str]), `look` (str|null (contact sheet PNG)), `look_error` (str|null), `summary` (str), `frame` (object|null), `font` (str|null), `mode` (full|overlay), `graphics` (str|null (kept ProRes 4444 layer)), `sparse` (null|{used, reason, stretches, drawn_frames, source_frames} (--sparse)), `kind` (null|failed), `error` (null|str (which verification rows failed))
@@ -185,7 +187,7 @@ analyze -> render -> deliver in one call, stopping at the first failed step.
 |---|---|---|---|
 | `input` | string, repeatable |  | source video; several are joined in order (ffmpeg-skill join.py) first (with --blank: none, or `-`) |
 | `--project (required)` | string |  | Remotion project folder made by init.py |
-| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, or yours) |
+| `--comp (required)` | string |  | composition id (Captioned, Jumpcut, PeakPulse, Titled, Highlights, BeatMontage, Karaoke, Pip, Emphasis, KineticType, Visualizer, ThreeScene, or yours) |
 | `--captions` | string |  | SRT / WebVTT / JSON cues for the timeline |
 | `--chapters` | string |  | chapters (`TIME TITLE` per line, or `source`): cards in Titled and, with --platform, chapter markers in the deliverable |
 | `--options` | string |  | JSON options file passed to the composition |
@@ -237,6 +239,7 @@ Holds:
 - analyze.py run twice on the same file writes a byte-identical timeline.json; on a copy at another path only source.path differs
 - pipeline.py writes byte-identical render and deliverable files; it is content_equivalent, not bit_exact, because its timeline.json records the input's absolute path
 - init.py (without --install) writes an identical project folder
+- ThreeScene (WebGL through @remotion/three, render.py --gl swangle by default) renders twice to byte-identical files, --concurrency 1 included; the scene is a function of the frame and options.seed alone
 
 Does not hold:
 

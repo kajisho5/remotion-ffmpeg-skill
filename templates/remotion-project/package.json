@@ -10,12 +10,16 @@
   "dependencies": {
     "@remotion/cli": "4.0.540",
     "@remotion/media-utils": "4.0.540",
+    "@remotion/three": "4.0.540",
+    "@react-three/fiber": "9.8.2",
     "remotion": "4.0.540",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
+    "@types/three": "0.186.0",
     "typescript": "^7.0.2"
   }
 }

@@ -178,6 +178,8 @@ DETERMINISM = {
         "pipeline.py writes byte-identical render and deliverable files; it is content_equivalent, not bit_exact, "
         "because its timeline.json records the input's absolute path",
         "init.py (without --install) writes an identical project folder",
+        "ThreeScene (WebGL through @remotion/three, render.py --gl swangle by default) renders twice to byte-identical "
+        "files, --concurrency 1 included; the scene is a function of the frame and options.seed alone",
     ],
     "does_not_hold": [
         "another Chromium build: chrome-headless-shell 153 and 156 differed on every frame (PSNR 43 dB average, "

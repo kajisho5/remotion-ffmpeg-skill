@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _sparse
-from _common import (loop_range, BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
+from _common import (gl_backend, loop_range, BUILTIN_COMPOSITIONS, STATE, add_common, add_frame_args, apply_common, die, emit, expected_frames,
                      ffskill, ffskill_cmd, frame_size, info, load_look, load_timeline, prepare_props, refuse_existing,
                      remotion_bin, require_ffmpeg_skill, require_project, remotion_error, run, shell_join)
 
@@ -79,6 +79,8 @@ def remotion_render_cmd(project: Path, comp: str, output: Path, props: Path, a: 
             cmd.append(f"--frames={a.frames}")
         if a.concurrency:
             cmd.append(f"--concurrency={a.concurrency}")
+        if gl_backend(comp, getattr(a, "gl", None)):
+            cmd.append(f"--gl={gl_backend(comp, a.gl)}")
         return cmd
     cmd = [str(remotion_bin(project)), "render", "src/index.ts", comp, str(output), f"--props={props}",
            f"--codec={a.codec}", "--log=warn"]
@@ -94,6 +96,8 @@ def remotion_render_cmd(project: Path, comp: str, output: Path, props: Path, a: 
             cmd.append("--crf=28")
     if a.concurrency:
         cmd.append(f"--concurrency={a.concurrency}")
+    if gl_backend(comp, getattr(a, "gl", None)):
+        cmd.append(f"--gl={gl_backend(comp, a.gl)}")
     return cmd
 
 

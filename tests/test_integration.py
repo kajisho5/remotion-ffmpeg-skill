@@ -789,6 +789,56 @@ class Visualizer(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
+class ThreeScene(unittest.TestCase):
+    """ThreeScene (Three.js): the same frame gives the same pixels on one machine and GL backend; doctor names it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tmp_dir(cls, "rfs-three-")
+        cls.tl = cls.tmp / "three.timeline.json"
+        code, res = script("analyze", "--blank", "2", "--size", "320x180", "-o", cls.tl)
+        assert code == 0, res
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_doctor_names_the_gl_backend(self):
+        proj = self.tmp / "proj"
+        script("init", proj)
+        code, res = script("doctor", "--project", proj)
+        row = next(r for r in res["checks"] if r["check"] == "gl backend")
+        self.assertIn("ThreeScene: swangle", row["value"])
+        (proj / "remotion.config.ts").write_text(
+            (proj / "remotion.config.ts").read_text(encoding="utf-8") + '\nConfig.setChromiumOpenGlRenderer("angle");\n',
+            encoding="utf-8")
+        code, res = script("doctor", "--project", proj)
+        row = next(r for r in res["checks"] if r["check"] == "gl backend")
+        self.assertTrue(row["value"].startswith("angle (remotion.config.ts"), row)
+        code, res = script("render", "--project", proj, "--comp", "ThreeScene", "--timeline", self.tl, "--dry-run")
+        self.assertEqual(code, 0, res)
+        self.assertIn("--gl=swangle", res["commands"][0])
+        code, res = script("render", "--project", proj, "--comp", "Captioned", "--timeline", self.tl, "--dry-run")
+        self.assertNotIn("--gl=", res["commands"][0])
+
+    @unittest.skipUnless(PROJECT, "set RFS_PROJECT to an installed project for real renders")
+    def test_real_two_renders_have_the_same_framemd5(self):
+        outs = []
+        for i, extra in enumerate(([], ["--concurrency", "1"], [])):
+            out = self.tmp / f"three_{i}.mp4"
+            opts = self.tmp / f"seed_{i}.json"
+            opts.write_text(json.dumps({"seed": 7 if i == 2 else 1}), encoding="utf-8")
+            code, res = script("render", "--project", PROJECT, "--comp", "ThreeScene", "--timeline", self.tl,
+                               "--options", opts, "-o", out, "--no-look", *extra)
+            self.assertEqual(code, 0, res)
+            self.assertTrue(res["verified"])
+            outs.append(framemd5(out))
+        self.assertEqual(len(outs[0]), 60)
+        self.assertEqual(outs[0], outs[1])          # same frame, same pixels
+        self.assertNotEqual(outs[0], outs[2])       # another seed, another scene
+
+
+@unittest.skipUnless(HAVE, "needs ffmpeg and ffmpeg-skill")
 class NtscRate(unittest.TestCase):
     """velisa/timebase@1 (docs/adr/0004): a 30000/1001 source is drawn at 30000/1001, not at the probe's 29.97."""
 

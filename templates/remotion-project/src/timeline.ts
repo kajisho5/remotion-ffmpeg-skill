@@ -173,6 +173,10 @@ export type Options = {
   loopBars: number | null;
   /** Visualizer: measured beats per bar (4 for 4/4). */
   beatsPerBar: number;
+  /** ThreeScene: the seed that places the particles (same seed, same scene). */
+  seed: number;
+  /** ThreeScene: number of particles, 1..5000. */
+  threeParticles: number;
 };
 
 export const DEFAULT_OPTIONS: Options = {
@@ -206,6 +210,8 @@ export const DEFAULT_OPTIONS: Options = {
   visualizerBars: 48,
   loopBars: null,
   beatsPerBar: 4,
+  seed: 1,
+  threeParticles: 300,
 };
 
 /** Where the camera plays on the source timeline: [from, durationInFrames, trimBefore] in frames. */
